@@ -75,15 +75,108 @@ static const struct super_operations assoofs_sops = {
     .drop_inode = generic_delete_inode,
 };
 
-/*
- *  Inicialización del superbloque
- */
+/* =========================================================== *
+ *  Información acerca de los inodos   
+ * =========================================================== */
+struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no){
+
+	//ACCEDEMOS A DISCO PARA LEER EL BLOQUE QUE CONTIENE EL ALMACEN DE INODOS
+	struct assoofs_inode_info *inode_info = NULL;
+	struct buffer_head *bh;
+
+	bh = sb_bread(sb, ASSOOFS_INODESTORE_BLOCK_NUMBER);
+	inode_info = (struct assoofs_inode_info *)bh->b_data;
+
+	//RECORREMOS EL ALMACÉN DE INODOS EN BUSCA DEL inode_no
+	struct assoofs_super_block_info *afs_sb = sb->s_fs_info;
+	struct assoofs_inode_info *buffer = NULL;
+	int i;
+	for(i = 0; i < afs_sb->inodes_count; i++){
+		if(inode_info->inode_no == inode_no){  //he encontrado el nodo por el que me preguntan
+			buffer = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);   //RESERVO MEMORIA EN EL KERNEL
+			memcpy(buffer, inode_info, sizeof(*buffer));					   //COPIO EN BUFFER EL CONTENIDO DEL INODO 
+			break;
+		}
+		inode_info++;  //sigo buscando en los inodos
+	}
+
+	//LIBERAR RECURSOS Y DEVOLVER LA INFORMACIÓN DEL INODO SI ESTABA EN EL ALMACÉN
+	brelse(bh);			//LIBERAR EL FUFFER HEAD
+	return buffer;		//DEVOLVER LA INFORMACIÓN DEL INODO QUE BUSCAMOS
+						//SI NO LO ENCUENTRA DEVUELVE BUFFER = NULL
+}
+
+/* =========================================================== *
+ *  INICIALIZACIÓN DEL SUPERBLOQUE    
+ * =========================================================== */
 int assoofs_fill_super(struct super_block *sb, void *data, int silent) {   
     printk(KERN_INFO "assoofs_fill_super request\n");
     // 1.- Leer la información persistente del superbloque del dispositivo de bloques  
+
+    	/* ++++++++++++++++++++++++++++++++++++++++++++ /
+    	   *       LEER BLOQUES DE DISCO              * /
+    	/ ++++++++++++++++++++++++++++++++++++++++++++ */ 
+
+    struct buffer_head *bh; 									//Aquí tendremos toda la información de un bloque
+    struct assoofs_super_block_info *assoofs_sb;				//Puntero al superbloque (info) 
+    bh = sb_bread(sb, ASSOOFS_SUPERBLOCK_BLOCK_NUMBER);			//Llamada a sb_bread, superbloque block read (superbloque, numero de bloque del superbloque)
+    assoofs_sb = (struct assoofs_super_block_info *)bh->b_data; //Sacar el contenido del bloque (b_data)(Campo binario) (Meto en assoofs_sb la info del superbloque)
+    			//Hacemos el cast para que se identifiquen los campos de info del superbloque					
+    brelse(bh);
+
     // 2.- Comprobar los parámetros del superbloque
+
+    	/* ++++++++++++++++++++++++++++++++++++++++++++ /
+    	   *         COMPROBAR PARAMETROS             * /
+    	/ ++++++++++++++++++++++++++++++++++++++++++++ */ 
+
+    if(assoofs_sb->magic == 0x20200406){
+    	printk(KERN_INFO "CORRECT -> assoofs magic number is correct (0x20200406)\n");
+    }else{
+    	printk(KERN_INFO "WARNING -> assoofs magic number do not correspond to (0x20200406)\n");
+    	return -1;
+    }
+
+    if(assoofs_sb->block_size == 4096){
+    	printk(KERN_INFO "CORRECT -> assoofs block size is correct (4096)\n");
+    }else{
+    	printk(KERN_INFO "WARNING -> assoofs block size does not correspond to (4096)\n");
+    	return -1;
+    }
+
     // 3.- Escribir la información persistente leída del dispositivo de bloques en el superbloque sb, incluído el campo s_op con las operaciones que soporta.
+
+    	/* ++++++++++++++++++++++++++++++++++++++++++++ /
+    	   *    ASIGNAR PARAMETROS Y OPERACIONES      * /
+    	/ ++++++++++++++++++++++++++++++++++++++++++++ */ 
+
+    sb->s_magic = ASSOOFS_MAGIC; 						//ASIGNAMOS EL NUMERO MAGICO AL NUEVO SUPERBLOQUE
+    sb->s_maxbytes = ASSOOFS_DEFAULT_BLOCK_SIZE;	//ASIGNAMOS EL TAMAÑO DE BLOQUE
+    sb->s_op = &assoofs_sops;						//ASIGNAMOS LAS OPERACIONES AL SUPERBLOQUE
+    sb->s_fs_info = assoofs_sb;
+
     // 4.- Crear el inodo raíz y asignarle operaciones sobre inodos (i_op) y sobre directorios (i_fop)
+    
+    	/* ++++++++++++++++++++++++++++++++++++++++++++ /
+    	   *    CREAR EL INODO RAIZ Y ASIGN. PARAM    * /
+    	/ ++++++++++++++++++++++++++++++++++++++++++++ */
+
+    struct inode *root_inode;			//AQUÍ VAMOS A GUARDAR EL INODO DEL ROOT
+    root_inode = new_inode(sb);			//Inicializamos el nodo con parametros del supoerbloque
+    inode_init_owner(root_inode, NULL, S_IFDIR); //Con esto seteamos propietario y permisos
+    				//inodo, inodo padre, tipo de inodo (IFREG para ficheros regulares)
+
+    //Ahora pasamos a asignarle informacion necesaria a nuestro inodo
+    root_inode->i_ino = ASSOOFS_ROOTDIR_INODE_NUMBER;		//NUMERO DE INODO DEL ROOT
+    root_inode->i_sb = sb;									//PUNTERO AL SUPERBLOQUE
+    root_inode->i_op = &assoofs_inode_ops;					//DIRECCION VARIABLE DE INODE OPERATIONS
+    root_inode->i_fop = &assoofs_dir_operations;			//DIRECCION DE OPERACINOES DE DIRECTORIOS
+    											//EN CASO DE SER FICHERO HAY OTRA FUNCION
+    root_inode->i_atime = root_inode->i_mtime = root_inode->i_ctime = current_time(root_inode);	//FECHAS Y HORA
+    root_inode->i_private = assoofs_get_inode_info(sb, ASSOOFS_ROOTDIR_INODE_NUMBER);	//INFORMACIÓN PERSISTENTE EN ELNODO
+
+    //GUARDAMOS EL INODO EN EL ARBOL DE INODOS (ESPECIAL YA QUE ES EL ROOT)
+    sb->s_root = d_make_root(root_inode);
     return 0;
 }
 
@@ -95,6 +188,7 @@ static struct dentry *assoofs_mount(struct file_system_type *fs_type, int flags,
     struct dentry *ret = mount_bdev(fs_type, flags, dev_name, data, assoofs_fill_super);        //Función que monta el dispositivo
                                                                     //Esta función es la que se encargará de llenar nuestro superbloque con la información correspondiente
     // Control de errores a partir del valor de ret. En este caso se puede utilizar la macro IS_ERR: if (IS_ERR(ret)) ...
+    return ret;
 }
 
 /* =========================================================== *
