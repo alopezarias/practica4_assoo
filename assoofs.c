@@ -255,13 +255,15 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
 
     //una vez asignado esto, vamos a almacenar el campo i_private del nodo, que contendrá datos persistentes que habrá que llevar a disco
     inode_info = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
-    assoofs_sb_get_a_freeblock(sb, &inode_info->data_block_number); 		//Para asignarle un bloque vacío
+    inode_info->inode_no = inode->i_ino;		
     inode_info->mode = mode;
     inode_info->file_size = 0;
     inode->i_private = inode_info;
-
     inode->i_fop=&assoofs_file_operations;
+    inode_init_owner(inode, dir, mode);
+    d_add(dentry, inode);
 
+    assoofs_sb_get_a_freeblock(sb, &inode_info->data_block_number);  //Para asignarle un bloque vacío
     assoofs_add_inode_info(sb, inode_info);							//Para guardar la informacion persistente del nuevo nodo en disco
 
     //AHORA PASO 2
