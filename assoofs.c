@@ -80,17 +80,18 @@ static const struct super_operations assoofs_sops = {
  * =========================================================== */
 struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no){
 
-	//ACCEDEMOS A DISCO PARA LEER EL BLOQUE QUE CONTIENE EL ALMACEN DE INODOS
+	//declaramos las estructuras y las variables a usar
+	struct assoofs_super_block_info *afs_sb = sb->s_fs_info;
 	struct assoofs_inode_info *inode_info = NULL;
+	struct assoofs_inode_info *buffer = NULL;
+	int i;
 	struct buffer_head *bh;
 
+	//ACCEDEMOS A DISCO PARA LEER EL BLOQUE QUE CONTIENE EL ALMACEN DE INODOS
 	bh = sb_bread(sb, ASSOOFS_INODESTORE_BLOCK_NUMBER);
 	inode_info = (struct assoofs_inode_info *)bh->b_data;
 
 	//RECORREMOS EL ALMACÉN DE INODOS EN BUSCA DEL inode_no
-	struct assoofs_super_block_info *afs_sb = sb->s_fs_info;
-	struct assoofs_inode_info *buffer = NULL;
-	int i;
 	for(i = 0; i < afs_sb->inodes_count; i++){
 		if(inode_info->inode_no == inode_no){  //he encontrado el nodo por el que me preguntan
 			buffer = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);   //RESERVO MEMORIA EN EL KERNEL
@@ -110,6 +111,12 @@ struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64
  *  INICIALIZACIÓN DEL SUPERBLOQUE    
  * =========================================================== */
 int assoofs_fill_super(struct super_block *sb, void *data, int silent) {   
+    
+	//Declaración de las variables y elementos a usar
+	struct inode *root_inode;									//AQUÍ VAMOS A GUARDAR EL INODO DEL ROOT
+	struct buffer_head *bh; 									//Aquí tendremos toda la información de un bloque
+    struct assoofs_super_block_info *assoofs_sb;				//Puntero al superbloque (info) 
+
     printk(KERN_INFO "assoofs_fill_super request\n");
     // 1.- Leer la información persistente del superbloque del dispositivo de bloques  
 
@@ -117,12 +124,11 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     	   *       LEER BLOQUES DE DISCO              * /
     	/ ++++++++++++++++++++++++++++++++++++++++++++ */ 
 
-    struct buffer_head *bh; 									//Aquí tendremos toda la información de un bloque
-    struct assoofs_super_block_info *assoofs_sb;				//Puntero al superbloque (info) 
     bh = sb_bread(sb, ASSOOFS_SUPERBLOCK_BLOCK_NUMBER);			//Llamada a sb_bread, superbloque block read (superbloque, numero de bloque del superbloque)
     assoofs_sb = (struct assoofs_super_block_info *)bh->b_data; //Sacar el contenido del bloque (b_data)(Campo binario) (Meto en assoofs_sb la info del superbloque)
-    			//Hacemos el cast para que se identifiquen los campos de info del superbloque					
-    brelse(bh);
+    			//Hacemos el cast para que se identifiquen los campos de info del superbloque	
+    			//data es un void *				
+    //brelse(bh);
 
     // 2.- Comprobar los parámetros del superbloque
 
@@ -130,19 +136,25 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     	   *         COMPROBAR PARAMETROS             * /
     	/ ++++++++++++++++++++++++++++++++++++++++++++ */ 
 
-    if(assoofs_sb->magic == 0x20200406){
-    	printk(KERN_INFO "CORRECT -> assoofs magic number is correct (0x20200406)\n");
-    }else{
-    	printk(KERN_INFO "WARNING -> assoofs magic number do not correspond to (0x20200406)\n");
+    printk(KERN_INFO "The magic number obtained in disk is %llu\n", assoofs_sb->magic);
+    //if(unlikely(assoofs_sb->magic != ASSOOFS_MAGIC)){
+     if(assoofs_sb->magic != ASSOOFS_MAGIC){
+    	printk(KERN_INFO "The filesystem that you want to mount is not assoofs. MAGIC_NUMBER mismatch.\n");
+    	brelse(bh);
     	return -1;
+    	//return -EPERM;
     }
 
-    if(assoofs_sb->block_size == 4096){
-    	printk(KERN_INFO "CORRECT -> assoofs block size is correct (4096)\n");
-    }else{
-    	printk(KERN_INFO "WARNING -> assoofs block size does not correspond to (4096)\n");
+    printk(KERN_INFO "The block size obtained in disk is %lld\n", assoofs_sb->block_size);
+    //if(unlikely(assoofs_sb->block_size != ASSOOFS_DEFAULT_BLOCK_SIZE)){
+    if(assoofs_sb->block_size != ASSOOFS_DEFAULT_BLOCK_SIZE){
+    	printk(KERN_INFO "assoofs seems to be formated using a wrong block size. BLOCK_SIZE mismatch.\n");
+    	brelse(bh);
     	return -1;
+    	//return -EPERM;
     }
+
+    printk(KERN_INFO "Recognised assoofs filesystem. (MAGIC_NUMBER = %llu & BLOCK_SIZE = %lld)\n", assoofs_sb->magic, assoofs_sb->block_size);
 
     // 3.- Escribir la información persistente leída del dispositivo de bloques en el superbloque sb, incluído el campo s_op con las operaciones que soporta.
 
@@ -150,7 +162,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     	   *    ASIGNAR PARAMETROS Y OPERACIONES      * /
     	/ ++++++++++++++++++++++++++++++++++++++++++++ */ 
 
-    sb->s_magic = ASSOOFS_MAGIC; 						//ASIGNAMOS EL NUMERO MAGICO AL NUEVO SUPERBLOQUE
+    sb->s_magic = ASSOOFS_MAGIC; 					//ASIGNAMOS EL NUMERO MAGICO AL NUEVO SUPERBLOQUE
     sb->s_maxbytes = ASSOOFS_DEFAULT_BLOCK_SIZE;	//ASIGNAMOS EL TAMAÑO DE BLOQUE
     sb->s_op = &assoofs_sops;						//ASIGNAMOS LAS OPERACIONES AL SUPERBLOQUE
     sb->s_fs_info = assoofs_sb;
@@ -160,8 +172,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     	/* ++++++++++++++++++++++++++++++++++++++++++++ /
     	   *    CREAR EL INODO RAIZ Y ASIGN. PARAM    * /
     	/ ++++++++++++++++++++++++++++++++++++++++++++ */
-
-    struct inode *root_inode;			//AQUÍ VAMOS A GUARDAR EL INODO DEL ROOT
+    
     root_inode = new_inode(sb);			//Inicializamos el nodo con parametros del supoerbloque
     inode_init_owner(root_inode, NULL, S_IFDIR); //Con esto seteamos propietario y permisos
     				//inodo, inodo padre, tipo de inodo (IFREG para ficheros regulares)
@@ -177,6 +188,14 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
 
     //GUARDAMOS EL INODO EN EL ARBOL DE INODOS (ESPECIAL YA QUE ES EL ROOT)
     sb->s_root = d_make_root(root_inode);
+
+    if(!sb->s_root){
+    	brelse(bh);
+    	return -1;
+    	//return -ENOMEM;
+    }
+
+    brelse(bh);
     return 0;
 }
 
