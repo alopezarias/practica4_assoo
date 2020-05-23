@@ -109,7 +109,7 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 	struct assoofs_dir_record_entry *record;
 	record = (struct assoofs_dir_record_entry *)bh->b_data;
 	for (i=0; i < parent_info->dir_children_count; i++) {
-		printk(KERN_INFO "Have file: '%s' (ino=%llu)\n");
+		printk(KERN_INFO "Have file: '%s' (ino=%llu)\n", record->filename, record->inode_no);
 		if (!strcmp(record->filename, child_dentry->d_name.name)) {		//COMPROBAR INFO DEL FICHERO CON EL QUE NOS PASAN (0 SI SON IGUALES, !=0 SI NO SON IGUALES)
 			struct inode *inode = assoofs_get_inode(sb, record->inode_no); // Función auxiliar que obtine la información de un inodo a partir de su número de inodo.
 			inode_init_owner(inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);	//OBTENER LA INFO DE ESE INODO
@@ -126,7 +126,70 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 
 static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool excl) {
     printk(KERN_INFO "New file request\n");
-    return 0;
+    //return 0;
+
+    //DECLARAMOS LAS ESTRUCTURAS Y LAS VARIABLES A USAR EN LA FUNCION
+    struct inode *inode;
+    struct super_block *sb;
+    uint64_t count;
+    struct assoofs_inode_info *inode_info;
+    struct assoofs_inode_info *parent_inode_info;
+	struct assoofs_dir_record_entry *dir_contents;
+	struct buffer_head *bh;
+
+    sb = dir->i_sb;			//OBTENEMOS UN PUNTERO AL SUPERBLOQUE DESDE DIR
+    count = ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count;
+    						//OBTENGO EL NUMERO DE INODOS DE LA INFORMACION PERSISTENTE DEL SUPERBLOQUE
+
+    if(count >= ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED){
+    	printk(KERN_ERR "There are too much inodes in the filesystem. Erase some of them to create one more\n");
+    	return -1;
+    }
+
+    inode = new_inode(sb);
+    //inode->i_ino = (count + ASSOOFS_START_INO - ASSOOFS_RESERVED_INODES + 1);
+    						//ASIGNO UN NUMERO AL NUEVO INODO A PARTIR DE COUNT
+    inode->i_ino = count+1;
+
+    inode->i_sb = sb;
+    inode->i_op = &assoofs_inode_ops;
+    inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+
+    //una vez asignado esto, vamos a almacenar el campo i_private del nodo, que contendrá datos persistentes que habrá que llevar a disco
+    inode_info = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
+    assoofs_sb_get_a_freeblock(sb, &inode_info->data_block_number); 		//Para asignarle un bloque vacío
+    inode_info->mode = mode;
+    inode_info->file_size = 0;
+    inode->i_private = inode_info;
+
+    inode->i_fop=&assoofs_file_operations;
+
+    assoofs_add_inode_info(sb, inode_info);							//Para guardar la informacion persistente del nuevo nodo en disco
+
+    //AHORA PASO 2
+    //MODIFICAR EL CONTENIDO DEL DIRECTORIO PADRE AÑADIENDO UNA ENTRADA PARA EL NUEVO ARCHIVO O DIRECTORIO
+	parent_inode_info = dir->i_private;
+										//cogemos la informacion del directorio padre, que alguna funcion ya lo habra seteado
+	bh = sb_bread(sb, parent_inode_info->data_block_number);
+										//leemos del disco la parte de losdatos y la metemos en dir_contents. 
+	dir_contents = (struct assoofs_dir_record_entry *)bh->b_data;
+										//APUNTA AL PRINCIPIO DEL DIRECTORIO PADRE
+	dir_contents += parent_inode_info->dir_children_count;
+										//Para avanzar vamos sumando cosas. Cuando le sumamos el num de elementos avanzamos al final del directorio padre
+	dir_contents->inode_no = inode_info->inode_no; // inode_info es la información persistente del inodo creado en el paso 2.
+										//Colocamos lo que hemos hecho antes con inode info
+	strcpy(dir_contents->filename, dentry->d_name.name);
+										//Tenemos que copiar el nombre del fichero
+	
+	//Escribir en disco
+	mark_buffer_dirty(bh);		//PONEMOS EL BIT A SUCIO
+	sync_dirty_buffer(bh);		//FORZAMOS LA SINCRONIZACION. Todos los cambios que esten en dirty, se trasladaran a disco
+	brelse(bh);					//liberamos memoria del bufferhead
+
+	parent_inode_info->dir_children_count++;			//AUMENTAMOS EN UNO ELCONTADOR DE HIJOS DEL PADRE
+	assoofs_save_inode_info(sb, parent_inode_info);		//CON ESTA FUNCION PASAMOS A DISCO LA INFORMACION DEL PADRE
+
+	return 0;	//PARA INDICAR QUE TODO HA SALIDO BIEN
 }
 
 static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode) {
