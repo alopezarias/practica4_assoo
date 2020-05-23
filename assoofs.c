@@ -6,6 +6,10 @@
 #include <linux/slab.h>         /* kmem_cache            */
 #include "assoofs.h"
 
+//DECLARACIONES GLOBALES DE FUNCIONES SIN DEFINICIONÇ
+static struct inode *assoofs_get_inode(struct super_block *sb, int ino);
+struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no);
+
 /*
  *  Operaciones sobre ficheros
  */
@@ -40,21 +44,80 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
     return 0;
 }
 
-/*
- *  Operaciones sobre inodos
- */
-static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool excl);
+/* =========================================================== *
+ *  Diferentes operaciones que se realizan sobre inodos  
+ * =========================================================== */
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags);
+static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool excl);
 static int assoofs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
+
+/* =========================================================== *
+ *  Estructura necesaria para manejar inodos   
+ * =========================================================== */
 static struct inode_operations assoofs_inode_ops = {
     .create = assoofs_create,
     .lookup = assoofs_lookup,
     .mkdir = assoofs_mkdir,
 };
 
+/* =========================================================== *
+ *  Necesario para devolver inodos 
+ * =========================================================== */
+static struct inode *assoofs_get_inode(struct super_block *sb, int ino){
+	
+	//DECLARAMOS ESTRUCTURAS Y VARIABLES A USAR
+	struct assoofs_inode_info *inode_info;
+	struct inode *inode;
+
+	//PASO 1, RECOLECTAMOS INFORMACION PERSISTENTE DEL INODO
+	inode_info = assoofs_get_inode_info(sb, ino);
+
+	//ASIGNAMOS PARAMETROS AL INODO, EL CUAL HEMOS CREADO
+	inode = new_inode(sb);
+
+	inode->i_ino = ino;
+	inode->i_sb = sb;
+	inode->i_op = &assoofs_inode_ops;
+
+	//DEPENDIENDO DEL TIPO DE ARCHIVO QUE SEA SE LE ASIGNAN UNAS OPERACIONES U OTRAS
+	if (S_ISDIR(inode_info->mode))
+		inode->i_fop = &assoofs_dir_operations;
+	else if (S_ISREG(inode_info->mode))
+		inode->i_fop = &assoofs_file_operations;
+	else
+		printk(KERN_ERR "Unknown inode type. Neither a directory nor a file.");
+
+	//SETEAMOS EL TIEPO Y DEVOLVEMOS EL INODO
+	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+	inode->i_private = inode_info;
+	return inode;
+}
+
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags) {
-    printk(KERN_INFO "Lookup request\n");
-    return NULL;
+   printk(KERN_INFO "Lookup request\n");
+   // return NULL;
+
+	struct assoofs_inode_info *parent_info = parent_inode->i_private;		//SACAMOS LA INFORMACION PERSISTENTE
+	struct super_block *sb = parent_inode->i_sb;							//SACAMOS EL SUPERBLOQUE
+	struct buffer_head *bh;													//PARA LEER LA INFO DEL BLOQUE PADRE
+	bh = sb_bread(sb, parent_info->data_block_number);
+	int i;						//EN ESTE CASO EL BLOQUE DONDE TIENE LA INFO EL RAIZ
+
+	//voy a recorrerlos records dentro del directorio
+	struct assoofs_dir_record_entry *record;
+	record = (struct assoofs_dir_record_entry *)bh->b_data;
+	for (i=0; i < parent_info->dir_children_count; i++) {
+		if (!strcmp(record->filename, child_dentry->d_name.name)) {		//COMPROBAR INFO DEL FICHERO CON EL QUE NOS PASAN (0 SI SON IGUALES, !=0 SI NO SON IGUALES)
+			struct inode *inode = assoofs_get_inode(sb, record->inode_no); // Función auxiliar que obtine la información de un inodo a partir de su número de inodo.
+			inode_init_owner(inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);	//OBTENER LA INFO DE ESE INODO
+			d_add(child_dentry, inode);		//GUARDAR LA INFO EN MEMORIA DEL FICHERO
+			return NULL;
+		}
+		record++;
+	}
+
+	printk(KERN_ERR "No inode found for the filename [%s]\n", child_dentry->d_name.name);
+	return NULL;
 }
 
 
@@ -68,9 +131,9 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
     return 0;
 }
 
-/*
- *  Operaciones sobre el superbloque
- */
+/* =========================================================== *
+ *  Operaciones sobre el superbloque   
+ * =========================================================== */
 static const struct super_operations assoofs_sops = {
     .drop_inode = generic_delete_inode,
 };
