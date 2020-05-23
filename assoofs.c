@@ -103,10 +103,13 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 	bh = sb_bread(sb, parent_info->data_block_number);
 	int i;						//EN ESTE CASO EL BLOQUE DONDE TIENE LA INFO EL RAIZ
 
+	printk(KERN_INFO "Lookup in: ino=%llu, b=%llu\n", parent_info->inode_no, parent_info->data_block_number);
+
 	//voy a recorrerlos records dentro del directorio
 	struct assoofs_dir_record_entry *record;
 	record = (struct assoofs_dir_record_entry *)bh->b_data;
 	for (i=0; i < parent_info->dir_children_count; i++) {
+		printk(KERN_INFO "Have file: '%s' (ino=%llu)\n");
 		if (!strcmp(record->filename, child_dentry->d_name.name)) {		//COMPROBAR INFO DEL FICHERO CON EL QUE NOS PASAN (0 SI SON IGUALES, !=0 SI NO SON IGUALES)
 			struct inode *inode = assoofs_get_inode(sb, record->inode_no); // Función auxiliar que obtine la información de un inodo a partir de su número de inodo.
 			inode_init_owner(inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);	//OBTENER LA INFO DE ESE INODO
