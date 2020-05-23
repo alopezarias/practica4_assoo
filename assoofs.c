@@ -9,6 +9,9 @@
 //DECLARACIONES GLOBALES DE FUNCIONES SIN DEFINICIONÇ
 static struct inode *assoofs_get_inode(struct super_block *sb, int ino);
 struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no);
+int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block);
+void assoofs_save_sb_info(struct super_block *vsb);
+void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode);
 
 /*
  *  Operaciones sobre ficheros
@@ -123,6 +126,63 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 	return NULL;
 }
 
+void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode){
+
+	//DECLARACION DE VARIABLES Y ESTRUCTURAS
+    uint64_t inodes_count;
+	struct buffer_head *bh;
+	struct assoofs_inode_info *inode_info;
+	struct assoofs_super_block_info *assoofs_sb = sb->s_fs_info;
+
+    inodes_count = assoofs_sb->inodes_count;   //obtenemos el count desde inode_info
+
+    bh = sb_bread(sb, ASSOOFS_INODESTORE_BLOCK_NUMBER);		//Leer de disco el bloque con el almacen de inodos
+
+    inode_info = (struct assoofs_inode_info *)bh->b_data;		//RECORRER ENTERO PARA APUNTAR AL FINAL
+	inode_info += assoofs_sb->inodes_count;
+	memcpy(inode_info, inode, sizeof(struct assoofs_inode_info));
+
+	mark_buffer_dirty(bh);		//LO MARCAMOS COMO SUCIO
+	sync_dirty_buffer(bh);		//SINCRONIZAMOS
+	brelse(bh);					//liberamos memoria del bufferhead
+
+	assoofs_sb->inodes_count++;		//
+	assoofs_save_sb_info(sb);
+}
+
+int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block){
+
+	struct assoofs_super_block_info *assoofs_sb = sb->s_fs_info;		//OBTENEMOS LA INFORMACION PERSISTENTE DEL SUPERBLOQUE
+
+	int i;					//RECORREMOS EL MAPA DE BITS EN BUSCA DE UN BLOQUE LIBRE (BIT = 1)
+	for (i = 2; i < ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED; i++)
+		if (assoofs_sb->free_blocks & (1 << i)){
+			break; // cuando aparece el primer bit 1 en free_block dejamos de recorrer el mapa de bits, i tiene la posición del primer bloque libre
+		}else if(i == ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED -1){
+			return -1; //Esto es cuando estamos evaluando el ultimo bit y esta lleno, pues devolvemos un -1 para notificar que no hay ninguno libre
+		}
+
+	//LA I DEBE SER SIEMPRE MENOR QUE EL NUMERO MAXIMO DE ARCHIVOS EN EL SISTEMA
+	*block = i; // Escribimos el valor de i en la dirección de memoria indicada como segundo argumento en la función
+
+	assoofs_sb->free_blocks &= ~(1 << i);
+	assoofs_save_sb_info(sb);
+	return 0;
+}
+
+void assoofs_save_sb_info(struct super_block *vsb){
+	
+	//DECLARAMOS LAS VARIABLES NECESARIAS PARA TRABAJAR
+	struct buffer_head *bh;				//LEEMOS DEL DISCO
+	struct assoofs_super_block *sb = vsb->s_fs_info; // Información persistente del superbloque en memoria
+	bh = sb_bread(vsb, ASSOOFS_SUPERBLOCK_BLOCK_NUMBER);		//COGEMOS DE DONDE ESTA GUARDADO EN MEMORIA
+	bh->b_data = (char *)sb; // Sobreescribo los datos de disco con la información en memoria
+
+	//Escribir en disco
+	mark_buffer_dirty(bh);		//PONEMOS EL BIT A SUCIO
+	sync_dirty_buffer(bh);		//FORZAMOS LA SINCRONIZACION. Todos los cambios que esten en dirty, se trasladaran a disco
+	brelse(bh);					//liberamos memoria del bufferhead
+}
 
 static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool excl) {
     printk(KERN_INFO "New file request\n");
