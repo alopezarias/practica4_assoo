@@ -12,6 +12,8 @@ struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64
 int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block);
 void assoofs_save_sb_info(struct super_block *vsb);
 void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode);
+int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *inode_info);
+struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, struct assoofs_inode_info *start, struct assoofs_inode_info *search);
 
 /*
  *  Operaciones sobre ficheros
@@ -124,6 +126,42 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 
 	printk(KERN_ERR "No inode found for the filename [%s]\n", child_dentry->d_name.name);
 	return NULL;
+}
+
+struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, struct assoofs_inode_info *start, struct assoofs_inode_info *search){
+
+	//VARIABLE A USAR
+	uint64_t count = 0;
+
+	//BUSCAMOS EL ALMACEN DE INODOS HASTA ENCONTRAR LOS DATOS DEL INDOO SEARCH
+	while (start->inode_no != search->inode_no && count < ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count) {
+		count++;
+		start++;
+	}
+
+	if (start->inode_no == search->inode_no)
+		return start;
+	else
+		return NULL;
+}
+
+int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *inode_info){
+
+	//declaracion de structs o variables que vamos a usar
+	struct buffer_head *bh;
+	struct assoofs_inode_info *inode_pos;
+
+	//ACCEDEMOS A DISCO PARA LEER EL BLOQUE QUE CONTIENE EL ALMACEN DE INODOS
+	bh = sb_bread(sb, ASSOOFS_INODESTORE_BLOCK_NUMBER);
+
+	inode_pos = assoofs_search_inode_info(sb, (struct assoofs_inode_info *)bh->b_data, inode_info);  //BUSCAMOS LA POSICION DE UN NODO EN CONCRETO
+
+	memcpy(inode_pos, inode_info, sizeof(*inode_pos));    //METEMOS LA INFORMACION EN LA INFORMACION DEL INODO
+	mark_buffer_dirty(bh);		//LO MARCAMOS COMO SUCIO
+	sync_dirty_buffer(bh);		//SINCRONIZAMOS
+	brelse(bh);					//liberamos memoria del bufferhead
+
+	return 0;
 }
 
 void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode){
