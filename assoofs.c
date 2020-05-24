@@ -46,7 +46,40 @@ const struct file_operations assoofs_dir_operations = {
 
 static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
     printk(KERN_INFO "Iterate request\n");
-    return 0;
+    //return 0;
+
+    //DECLARACIONES DE VARIABLES Y ESTRUCTURAS A USAR EN LA FUNCION
+    struct inode *inode;
+	struct super_block *sb;
+	struct assoofs_inode_info *inode_info;
+	struct buffer_head *bh;
+	struct assoofs_dir_record_entry *record;
+	int i;
+
+	//Antes de nada comprobamos si el directorio ya se encuentra en la cache para evitar bucles infinitos
+	if (ctx->pos) return 0;
+
+	//Sacamos del descriptor de archivos todo lo que necesitamos:
+	inode = filp->f_path.dentry->d_inode;		//el inodo
+	sb = inode->i_sb;							//el superbloque
+	inode_info = inode->i_private;				//la informacion del inodo
+
+	if ((!S_ISDIR(inode_info->mode))) return -1;  //Si por algun casual el modo del indodo no es de directorio, nos salimos
+
+
+	bh = sb_bread(sb, inode_info->data_block_number);			//leemos en disco
+	record = (struct assoofs_dir_record_entry *)bh->b_data;		//el contenido que queriamos estaba en data y hay que castearlo
+	for (i = 0; i < inode_info->dir_children_count; i++) {		//recorremos todos los hijos que tiene el directorio
+		dir_emit(ctx, record->filename, ASSOOFS_FILENAME_MAXLEN, record->inode_no, DT_UNKNOWN);		//Inicializando el contexto con los datos del directorio
+		ctx->pos += sizeof(struct assoofs_dir_record_entry);										//Incrementamos el valor del puntero pos, se inicializa con 0, pero lo voy a aumentar tanto como ocupe un record entry
+		record++;																					//Aumento el valor del puntero record
+	}
+
+	//Liberamos la memoria del bufferhead
+	brelse(bh);
+
+	//Si todo ha ido bien salimos y devolvemos un cero
+	return 0;
 }
 
 /* =========================================================== *
