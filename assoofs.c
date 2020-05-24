@@ -49,12 +49,40 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
 	copy_to_user(buf, buffer, nbytes);
 
 	*ppos += nbytes;		//incrementamos ppos
+	brelse(bh);				//liberamos memoria del bufferhead
 	return nbytes;			//devolvemos el numero de bytes leidos
 }
 
 ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, loff_t * ppos) {
     printk(KERN_INFO "Write request\n");
-    return -1;
+    //return -1;
+
+    //DECLARAMOS LAS VARIABLES Y LAS ESTRUCTURAS NECESARIAS
+    struct assoofs_inode_info *inode_info;
+    struct buffer_head *bh;
+	char *buffer;
+	struct inode *inode;
+	struct super_block *sb;
+
+	inode = filp->f_path.dentry->d_inode;		//el inodo
+	sb = inode->i_sb;							//para sacar el superbloque y poder escribir en el despues
+
+    inode_info = filp->f_path.dentry->d_inode->i_private; //obtenemos la informacion persistente del nodo
+
+    //Copiamos en disco la información que nos han dado
+    buffer = (char *)bh->b_data;
+    buffer += *ppos;
+	copy_from_user(buffer, buf, len);
+
+	*ppos+=len; //actualizamos el puntero ppos
+
+	mark_buffer_dirty(bh);		//LO MARCAMOS COMO SUCIO
+	sync_dirty_buffer(bh);		//SINCRONIZAMOS
+	brelse(bh);					//liberamos memoria del bufferhead
+
+	inode_info->file_size = *ppos;				//actualizamos la informacion del tamaño
+	assoofs_save_inode_info(sb, inode_info);	//guardamos la informacion del inodo en disco
+	return len;									//devolvemos el numero de bytes que hemos escrit0
 }
 
 /*
