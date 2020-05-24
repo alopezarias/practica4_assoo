@@ -38,7 +38,10 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
     inode_info = filp->f_path.dentry->d_inode->i_private; //obtenemos la informacion persistente del nodo
 
     //Para comprobar si hemos o no llegado al final del fichero
-    if (*ppos >= inode_info->file_size) return 0;   
+    if (*ppos >= inode_info->file_size){
+    	printk(KERN_INFO "EOF Reached\n");
+    	return 0;   
+    }
 
     //Leemos del disco la información que nos han pedido
     bh = sb_bread(filp->f_path.dentry->d_inode->i_sb, inode_info->data_block_number);
@@ -46,10 +49,12 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
 
 	//copiamos en buf el contenido del fichero que hemos leido
 	nbytes = min((size_t) inode_info->file_size, len); // Hay que comparar len con el tama~no del fichero por si llegamos al final del fichero
+	printk(KERN_INFO "TEXT READ: %s\n", buffer);
 	copy_to_user(buf, buffer, nbytes);
 
 	*ppos += nbytes;		//incrementamos ppos
 	brelse(bh);				//liberamos memoria del bufferhead
+	printk(KERN_INFO "BYTES READ: %lld\n", nbytes);
 	return nbytes;			//devolvemos el numero de bytes leidos
 }
 
@@ -64,15 +69,20 @@ ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, l
 	struct inode *inode;
 	struct super_block *sb;
 
-	inode = filp->f_path.dentry->d_inode;		//el inodo
-	sb = inode->i_sb;							//para sacar el superbloque y poder escribir en el despues
+	sb = filp->f_path.dentry->d_inode->i_sb;		//el superbloque
 
     inode_info = filp->f_path.dentry->d_inode->i_private; //obtenemos la informacion persistente del nodo
+
+	bh = sb_bread(filp->f_path.dentry->d_inode->i_sb, inode_info->data_block_number);
 
     //Copiamos en disco la información que nos han dado
     buffer = (char *)bh->b_data;
     buffer += *ppos;
-	copy_from_user(buffer, buf, len);
+	if(copy_from_user(buffer, buf, len)){
+		brelse(bh);
+		printk(KERN_ERR "Error copying file contents from the userspace buffer to the kernel");
+		return -1;
+	}
 
 	*ppos+=len; //actualizamos el puntero ppos
 
@@ -116,7 +126,6 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
 
 	if ((!S_ISDIR(inode_info->mode))) return -1;  //Si por algun casual el modo del indodo no es de directorio, nos salimos
 
-
 	bh = sb_bread(sb, inode_info->data_block_number);			//leemos en disco
 	record = (struct assoofs_dir_record_entry *)bh->b_data;		//el contenido que queriamos estaba en data y hay que castearlo
 	for (i = 0; i < inode_info->dir_children_count; i++) {		//recorremos todos los hijos que tiene el directorio
@@ -153,6 +162,8 @@ static struct inode_operations assoofs_inode_ops = {
  * =========================================================== */
 static struct inode *assoofs_get_inode(struct super_block *sb, int ino){
 	
+	printk(KERN_INFO "assoofs get inode request\n");
+
 	//DECLARAMOS ESTRUCTURAS Y VARIABLES A USAR
 	struct assoofs_inode_info *inode_info;
 	struct inode *inode;
@@ -213,6 +224,8 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 
 struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, struct assoofs_inode_info *start, struct assoofs_inode_info *search){
 
+	printk(KERN_INFO "assoofs search inode info request\n");
+
 	//VARIABLE A USAR
 	uint64_t count = 0;
 
@@ -229,6 +242,8 @@ struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, str
 }
 
 int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *inode_info){
+
+	printk(KERN_INFO "assoofs save inode info request\n");
 
 	//declaracion de structs o variables que vamos a usar
 	struct buffer_head *bh;
@@ -248,6 +263,8 @@ int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 }
 
 void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode){
+
+	printk(KERN_INFO "assoofs add inode info request\n");
 
 	//DECLARACION DE VARIABLES Y ESTRUCTURAS
     uint64_t inodes_count;
@@ -273,6 +290,8 @@ void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 
 int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block){
 
+	printk(KERN_INFO "assoofs get a free block request\n");
+
 	struct assoofs_super_block_info *assoofs_sb = sb->s_fs_info;		//OBTENEMOS LA INFORMACION PERSISTENTE DEL SUPERBLOQUE
 
 	int i;					//RECORREMOS EL MAPA DE BITS EN BUSCA DE UN BLOQUE LIBRE (BIT = 1)
@@ -293,6 +312,8 @@ int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block){
 
 void assoofs_save_sb_info(struct super_block *vsb){
 	
+	printk(KERN_INFO "assoofs save sb info request\n");
+
 	//DECLARAMOS LAS VARIABLES NECESARIAS PARA TRABAJAR
 	struct buffer_head *bh;				//LEEMOS DEL DISCO
 	struct assoofs_super_block *sb = vsb->s_fs_info; // Información persistente del superbloque en memoria
@@ -419,7 +440,7 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
 
 
     //inode->i_fop=&assoofs_file_operations;
-    inode_init_owner(inode, dir, mode);
+    inode_init_owner(inode, dir, inode_info->mode);
     d_add(dentry, inode);
 
     assoofs_sb_get_a_freeblock(sb, &inode_info->data_block_number);  //Para asignarle un bloque vacío
@@ -463,6 +484,8 @@ static const struct super_operations assoofs_sops = {
  * =========================================================== */
 struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no){
 
+	printk(KERN_INFO "assoofs get inode info request\n");
+
 	//declaramos las estructuras y las variables a usar
 	struct assoofs_super_block_info *afs_sb = sb->s_fs_info;
 	struct assoofs_inode_info *inode_info = NULL;
@@ -494,7 +517,7 @@ struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64
  *  INICIALIZACIÓN DEL SUPERBLOQUE    
  * =========================================================== */
 int assoofs_fill_super(struct super_block *sb, void *data, int silent) {   
-    
+   
 	//Declaración de las variables y elementos a usar
 	struct inode *root_inode;									//AQUÍ VAMOS A GUARDAR EL INODO DEL ROOT
 	struct buffer_head *bh; 									//Aquí tendremos toda la información de un bloque
@@ -522,7 +545,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     printk(KERN_INFO "The magic number obtained in disk is %llu\n", assoofs_sb->magic);
     //if(unlikely(assoofs_sb->magic != ASSOOFS_MAGIC)){
      if(assoofs_sb->magic != ASSOOFS_MAGIC){
-    	printk(KERN_INFO "The filesystem that you want to mount is not assoofs. MAGIC_NUMBER mismatch.\n");
+    	printk(KERN_ERR "The filesystem that you want to mount is not assoofs. MAGIC_NUMBER mismatch.\n");
     	brelse(bh);
     	return -1;
     	//return -EPERM;
@@ -531,7 +554,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     printk(KERN_INFO "The block size obtained in disk is %lld\n", assoofs_sb->block_size);
     //if(unlikely(assoofs_sb->block_size != ASSOOFS_DEFAULT_BLOCK_SIZE)){
     if(assoofs_sb->block_size != ASSOOFS_DEFAULT_BLOCK_SIZE){
-    	printk(KERN_INFO "assoofs seems to be formated using a wrong block size. BLOCK_SIZE mismatch.\n");
+    	printk(KERN_ERR "assoofs seems to be formated using a wrong block size. BLOCK_SIZE mismatch.\n");
     	brelse(bh);
     	return -1;
     	//return -EPERM;
@@ -577,6 +600,8 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     	return -1;
     	//return -ENOMEM;
     }
+
+    printk(KERN_INFO "Superbloque montado correctamente. Listo para funcionar\n");
 
     brelse(bh);
     return 0;
