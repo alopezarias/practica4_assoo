@@ -27,7 +27,29 @@ const struct file_operations assoofs_file_operations = {
 
 ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t * ppos) {
     printk(KERN_INFO "Read request\n");
-    return -1;
+    //return -1;
+    
+    //DECLARAMOS LAS VARIABLES Y LAS ESTRUCTURAS NECESARIAS
+    struct assoofs_inode_info *inode_info;
+    struct buffer_head *bh;
+	char *buffer;
+	int nbytes;
+
+    inode_info = filp->f_path.dentry->d_inode->i_private; //obtenemos la informacion persistente del nodo
+
+    //Para comprobar si hemos o no llegado al final del fichero
+    if (*ppos >= inode_info->file_size) return 0;   
+
+    //Leemos del disco la información que nos han pedido
+    bh = sb_bread(filp->f_path.dentry->d_inode->i_sb, inode_info->data_block_number);
+	buffer = (char *)bh->b_data;
+
+	//copiamos en buf el contenido del fichero que hemos leido
+	nbytes = min((size_t) inode_info->file_size, len); // Hay que comparar len con el tama~no del fichero por si llegamos al final del fichero
+	copy_to_user(buf, buffer, nbytes);
+
+	*ppos += nbytes;		//incrementamos ppos
+	return nbytes;			//devolvemos el numero de bytes leidos
 }
 
 ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, loff_t * ppos) {
