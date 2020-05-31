@@ -11,4 +11,5 @@ A parte tambien estan implementadas algunas funcionalidades
 extras:
 
 	- Cache de inodos
-	
+	- Semaforos en las escrituras del superbloque
+	- Semaforos en las escrituras del almacen de inodos

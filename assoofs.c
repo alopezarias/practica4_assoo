@@ -10,7 +10,9 @@
 #define DRIVER_AUTHOR "Angel Lopez Arias"
 #define DRIVER_DESC   "An assoofs sample"
 
-//static DEFINE_MUTEX(assoofs_sb_lock);
+//Configuramos unos mutex para proteger el acceso al superbloque y al almacen de inodos
+static DEFINE_MUTEX(assoofs_sb_lock);
+static DEFINE_MUTEX(assoofs_inodes_block_lock);
 
 //Vamos a configurar una chache de inodos como variable global
 static struct kmem_cache *assoofs_inode_cache;
@@ -125,8 +127,14 @@ ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, l
 	sync_dirty_buffer(bh);		//SINCRONIZAMOS
 	brelse(bh);					//liberamos memoria del bufferhead
 
+	//-----------------------  MUTEX DEL ALMACEN DE INODOS  -------------------------//
+    mutex_lock_interruptible(&assoofs_inodes_block_lock);
+
 	inode_info->file_size = *ppos;				//actualizamos la informacion del tamaño
 	assoofs_save_inode_info(sb, inode_info);	//guardamos la informacion del inodo en disco
+	
+	mutex_unlock(&assoofs_inodes_block_lock);
+
 	return len;									//devolvemos el numero de bytes que hemos escrit0
 }
 
@@ -342,12 +350,17 @@ int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 	//ACCEDEMOS A DISCO PARA LEER EL BLOQUE QUE CONTIENE EL ALMACEN DE INODOS
 	bh = sb_bread(sb, ASSOOFS_INODESTORE_BLOCK_NUMBER);
 
+	//--------------------------  MUTEX DEL SUPER BLOQUE  ---------------------------//
+    mutex_lock_interruptible(&assoofs_sb_lock);
+
 	inode_pos = assoofs_search_inode_info(sb, (struct assoofs_inode_info *)bh->b_data, inode_info);  //BUSCAMOS LA POSICION DE UN NODO EN CONCRETO
 
 	memcpy(inode_pos, inode_info, sizeof(*inode_pos));    //METEMOS LA INFORMACION EN LA INFORMACION DEL INODO
 	mark_buffer_dirty(bh);		//LO MARCAMOS COMO SUCIO
 	sync_dirty_buffer(bh);		//SINCRONIZAMOS
 	brelse(bh);					//liberamos memoria del bufferhead
+
+	mutex_unlock(&assoofs_sb_lock);
 
 	return 0;
 }
@@ -371,11 +384,19 @@ void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *i
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
     / ++++++++++++++++++++++++++++++++++++++++++++ */
+
     inodes_count = assoofs_sb->inodes_count;   //obtenemos el count desde inode_info
+
+    //-----------------------  MUTEX DEL ALMACEN DE INODOS  -------------------------//
+    mutex_lock_interruptible(&assoofs_inodes_block_lock);
 
     bh = sb_bread(sb, ASSOOFS_INODESTORE_BLOCK_NUMBER);		//Leer de disco el bloque con el almacen de inodos
 
     inode_info = (struct assoofs_inode_info *)bh->b_data;		//RECORRER ENTERO PARA APUNTAR AL FINAL
+	
+	//--------------------------  MUTEX DEL SUPER BLOQUE  ---------------------------//
+    mutex_lock_interruptible(&assoofs_sb_lock);
+
 	inode_info += assoofs_sb->inodes_count;
 	memcpy(inode_info, inode, sizeof(struct assoofs_inode_info));
 
@@ -385,6 +406,9 @@ void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 
 	assoofs_sb->inodes_count++;		
 	assoofs_save_sb_info(sb);
+
+	mutex_unlock(&assoofs_sb_lock);
+	mutex_unlock(&assoofs_inodes_block_lock);
 }
 
 /* =========================================================== *
@@ -405,6 +429,9 @@ int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block){
      *      PROCECEMOS CON EL DESARROLLO           * 
     / ++++++++++++++++++++++++++++++++++++++++++++ */
 
+	//--------------------------  MUTEX DEL SUPER BLOQUE  ---------------------------//
+    mutex_lock_interruptible(&assoofs_sb_lock);
+
 	assoofs_sb = sb->s_fs_info;		//OBTENEMOS LA INFORMACION PERSISTENTE DEL SUPERBLOQUE
 
 	//RECORREMOS EL MAPA DE BITS EN BUSCA DE UN BLOQUE LIBRE (BIT = 1)
@@ -420,6 +447,9 @@ int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block){
 
 	assoofs_sb->free_blocks &= ~(1 << i);
 	assoofs_save_sb_info(sb);
+
+	mutex_unlock(&assoofs_sb_lock);
+
 	return 0;
 }
 
@@ -476,8 +506,14 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
     / ++++++++++++++++++++++++++++++++++++++++++++ */
 
     sb = dir->i_sb;			//OBTENEMOS UN PUNTERO AL SUPERBLOQUE DESDE DIR
+
+    //-----------------------  MUTEX DEL ALMACEN DE INODOS  -------------------------//
+    mutex_lock_interruptible(&assoofs_inodes_block_lock);
+
     count = ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count;
     						//OBTENGO EL NUMERO DE INODOS DE LA INFORMACION PERSISTENTE DEL SUPERBLOQUE
+
+    mutex_unlock(&assoofs_inodes_block_lock);
 
     if(count >= ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED){
     	printk(KERN_ERR "There are too much inodes in the filesystem. Erase some of them to create one more\n");
@@ -531,8 +567,13 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
 	sync_dirty_buffer(bh);		//FORZAMOS LA SINCRONIZACION. Todos los cambios que esten en dirty, se trasladaran a disco
 	brelse(bh);					//liberamos memoria del bufferhead
 
+	//-----------------------  MUTEX DEL ALMACEN DE INODOS  -------------------------//
+    mutex_lock_interruptible(&assoofs_inodes_block_lock);
+
 	parent_inode_info->dir_children_count++;			//AUMENTAMOS EN UNO ELCONTADOR DE HIJOS DEL PADRE
 	assoofs_save_inode_info(sb, parent_inode_info);		//CON ESTA FUNCION PASAMOS A DISCO LA INFORMACION DEL PADRE
+
+	mutex_unlock(&assoofs_inodes_block_lock);
 
 	return 0;	//PARA INDICAR QUE TODO HA SALIDO BIEN
 }
