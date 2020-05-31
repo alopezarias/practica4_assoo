@@ -10,7 +10,10 @@
 #define DRIVER_AUTHOR "Angel Lopez Arias"
 #define DRIVER_DESC   "An assoofs sample"
 
-static DEFINE_MUTEX(assoofs_sb_lock);
+//static DEFINE_MUTEX(assoofs_sb_lock);
+
+//Vamos a configurar una chache de inodos como variable global
+static struct kmem_cache *assoofs_inode_cache;
 
 /* ++++++++++++++++++++++++++++++++++++++++++++ /
  *       DECLARACION FUNCIONES                 *
@@ -491,7 +494,12 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 
     //una vez asignado esto, vamos a almacenar el campo i_private del nodo, que contendrá datos persistentes que habrá que llevar a disco
-    inode_info = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
+    
+    	//ESTA ES LA MANERA SIN CACHE DE INODOS
+    //inode_info = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
+    	//ESTA ES LA MANERA CON CACHE DE INODOS
+    inode_info = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);	
+
     inode_info->inode_no = inode->i_ino;		
     inode_info->mode = mode;
     inode_info->file_size = 0;
@@ -571,7 +579,12 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 
     //una vez asignado esto, vamos a almacenar el campo i_private del nodo, que contendrá datos persistentes que habrá que llevar a disco
-    inode_info = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
+    
+    //ESTA ES LA MANERA SIN CACHE DE INODOS
+    //inode_info = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
+    	//ESTA ES LA MANERA CON CACHE DE INODOS
+    inode_info = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);	
+
     inode_info->inode_no = inode->i_ino;		
     //inode_info->mode = mode;
     inode_info->file_size = 0;
@@ -650,7 +663,12 @@ struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64
 	//RECORREMOS EL ALMACÉN DE INODOS EN BUSCA DEL inode_no
 	for(i = 0; i < afs_sb->inodes_count; i++){
 		if(inode_info->inode_no == inode_no){  //he encontrado el nodo por el que me preguntan
-			buffer = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);   //RESERVO MEMORIA EN EL KERNEL
+			
+				//ESTA ES LA MANERA SIN CACHE DE INODOS
+    		//buffer = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
+    			//ESTA ES LA MANERA CON CACHE DE INODOS
+   			buffer = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);	   //RESERVO MEMORIA EN EL KERNEL
+
 			memcpy(buffer, inode_info, sizeof(*buffer));					   //COPIO EN BUFFER EL CONTENIDO DEL INODO 
 			break;
 		}
@@ -814,6 +832,10 @@ static int __init assoofs_init(void) {
      *      PROCECEMOS CON EL DESARROLLO           * 
     / ++++++++++++++++++++++++++++++++++++++++++++ */
     ret = register_filesystem(&assoofs_type);
+    
+    //configuramos la cache inicializandola como sigue
+    assoofs_inode_cache = kmem_cache_create("assoofs_inode_cache", sizeof(struct assoofs_inode_info), 0, (SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD), NULL);
+
     // Control de errores a partir del valor de ret
     return ret;
 }
@@ -834,6 +856,10 @@ static void __exit assoofs_exit(void) {
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
     / ++++++++++++++++++++++++++++++++++++++++++++ */
+    
+    //procedemos a liberar la cache cuando desmontamos el modulo
+    kmem_cache_destroy(assoofs_inode_cache);
+
     ret = unregister_filesystem(&assoofs_type);
     // Control de errores a partir del valor de ret
 }
