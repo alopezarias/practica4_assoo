@@ -5,6 +5,11 @@
 #include <linux/buffer_head.h>  /* buffer_head           */
 #include <linux/slab.h>         /* kmem_cache            */
 #include "assoofs.h"
+
+//Configuramos unas macros para la licencia 
+#define DRIVER_AUTHOR "Angel Lopez Arias"
+#define DRIVER_DESC   "An assoofs sample"
+
 static DEFINE_MUTEX(assoofs_sb_lock);
 
 /* ++++++++++++++++++++++++++++++++++++++++++++ /
@@ -835,3 +840,8 @@ static void __exit assoofs_exit(void) {
 
 module_init(assoofs_init);
 module_exit(assoofs_exit);
+
+//Terminamos de configurar las macros para hacer el modulo de licencia abierta
+MODULE_LICENSE("GPL");			//Licencia de codigo abierto
+MODULE_AUTHOR(DRIVER_AUTHOR);	//Autor
+MODULE_DESCRIPTION(DRIVER_DESC);//Descripcion breve
