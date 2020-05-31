@@ -5,8 +5,11 @@
 #include <linux/buffer_head.h>  /* buffer_head           */
 #include <linux/slab.h>         /* kmem_cache            */
 #include "assoofs.h"
+static DEFINE_MUTEX(assoofs_sb_lock);
 
-//DECLARACIONES GLOBALES DE FUNCIONES SIN DEFINICIONÇ
+/* ++++++++++++++++++++++++++++++++++++++++++++ /
+ *       DECLARACION FUNCIONES                 *
+/ ++++++++++++++++++++++++++++++++++++++++++++ */
 static struct inode *assoofs_get_inode(struct super_block *sb, int ino);
 struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no);
 int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block);
@@ -15,9 +18,9 @@ void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *inode_info);
 struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, struct assoofs_inode_info *start, struct assoofs_inode_info *search);
 
-/*
- *  Operaciones sobre ficheros
- */
+/* =========================================================== *
+ *  OPERACIONES SOBRE FICHEROS DEL SO    
+ * =========================================================== */
 ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t * ppos);
 ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, loff_t * ppos);
 const struct file_operations assoofs_file_operations = {
@@ -25,51 +28,78 @@ const struct file_operations assoofs_file_operations = {
     .write = assoofs_write,
 };
 
+/* =========================================================== *
+ *  OPERACION SOBRE FICHEROS --> READ    
+ * =========================================================== */
 ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t * ppos) {
-    //DECLARAMOS LAS VARIABLES Y LAS ESTRUCTURAS NECESARIAS
+    
+    /* ++++++++++++++++++++++++++++++++++++++++++++ /
+     *     DECLARACION DE VARIABLES                * 
+    / ++++++++++++++++++++++++++++++++++++++++++++ */
     struct assoofs_inode_info *inode_info;
     struct buffer_head *bh;
 	char *buffer;
 	int nbytes;
 
+	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO "Read request\n");
 
-    inode_info = filp->f_path.dentry->d_inode->i_private; //obtenemos la informacion persistente del nodo
+    /* ++++++++++++++++++++++++++++++++++++++++++++ /
+     *      PROCECEMOS CON EL DESARROLLO           * 
+    / ++++++++++++++++++++++++++++++++++++++++++++ */	
+
+	//obtenemos la informacion persistente del nodo
+    inode_info = filp->f_path.dentry->d_inode->i_private; 
 
     //Para comprobar si hemos o no llegado al final del fichero
     if (*ppos >= inode_info->file_size){
-    	printk(KERN_INFO "EOF Reached\n");
+    	printk(KERN_INFO "READ: EOF reached\n");
     	return 0;   
     }
 
     //Leemos del disco la información que nos han pedido
     bh = sb_bread(filp->f_path.dentry->d_inode->i_sb, inode_info->data_block_number);
+    //copiamos en buf el contenido del fichero que hemos leido
 	buffer = (char *)bh->b_data;
 
-	//copiamos en buf el contenido del fichero que hemos leido
-	nbytes = min((size_t) inode_info->file_size, len); // Hay que comparar len con el tama~no del fichero por si llegamos al final del fichero
+	// Hay que comparar len con el tamanio del fichero por si llegamos al final del fichero
+	nbytes = min((size_t) inode_info->file_size, len); 
 	printk(KERN_INFO "TEXT READ: %s\n", buffer);
 	copy_to_user(buf, buffer, nbytes);
 
 	*ppos += nbytes;		//incrementamos ppos
 	brelse(bh);				//liberamos memoria del bufferhead
-	printk(KERN_INFO "BYTES READ: %d\n", nbytes);
+	printk(KERN_INFO "BYTES READ: %d\n", nbytes);		//imprimios una traza de lectura
 	return nbytes;			//devolvemos el numero de bytes leidos
 }
 
+/* =========================================================== *
+ *  OPERACION SOBRE FICHEROS --> WRITE   
+ * =========================================================== */
 ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, loff_t * ppos) {
-    //DECLARAMOS LAS VARIABLES Y LAS ESTRUCTURAS NECESARIAS
+    
+    /* ++++++++++++++++++++++++++++++++++++++++++++ /
+     *     DECLARACION DE VARIABLES                * 
+    / ++++++++++++++++++++++++++++++++++++++++++++ */
     struct assoofs_inode_info *inode_info;
     struct buffer_head *bh;
 	char *buffer;
 	struct super_block *sb;
 
+	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO "Write request\n");
 
-	sb = filp->f_path.dentry->d_inode->i_sb;		//el superbloque
+    /* ++++++++++++++++++++++++++++++++++++++++++++ /
+     *      PROCECEMOS CON EL DESARROLLO           * 
+    / ++++++++++++++++++++++++++++++++++++++++++++ */
 
-    inode_info = filp->f_path.dentry->d_inode->i_private; //obtenemos la informacion persistente del nodo
+	//mediante el file flip accedemos a la informacion del superbloque
+	sb = filp->f_path.dentry->d_inode->i_sb;
 
+	//obtenemos la informacion persistente del nodo
+    inode_info = filp->f_path.dentry->d_inode->i_private;
+
+    //leemos informacion del superbloque
 	bh = sb_bread(filp->f_path.dentry->d_inode->i_sb, inode_info->data_block_number);
 
     //Copiamos en disco la información que nos han dado
@@ -92,17 +122,23 @@ ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, l
 	return len;									//devolvemos el numero de bytes que hemos escrit0
 }
 
-/*
- *  Operaciones sobre directorios
- */
+/* =========================================================== *
+ *  OPERACIONES SOBRE DIRECTORIOS   
+ * =========================================================== */
 static int assoofs_iterate(struct file *filp, struct dir_context *ctx);
 const struct file_operations assoofs_dir_operations = {
     .owner = THIS_MODULE,
     .iterate = assoofs_iterate,
 };
 
+/* =========================================================== *
+ *  OPERACION DIRECTORIO --> ITERATE   
+ * =========================================================== */
 static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
-    //DECLARACIONES DE VARIABLES Y ESTRUCTURAS A USAR EN LA FUNCION
+    
+    /* ++++++++++++++++++++++++++++++++++++++++++++ /
+	 *       DECLARACION FUNCIONES                 *
+	/ ++++++++++++++++++++++++++++++++++++++++++++ */
     struct inode *inode;
 	struct super_block *sb;
 	struct assoofs_inode_info *inode_info;
@@ -110,9 +146,17 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
 	struct assoofs_dir_record_entry *record;
 	int i;
 
+	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO "Iterate request\n");
+
+    /* ++++++++++++++++++++++++++++++++++++++++++++ /
+     *      PROCECEMOS CON EL DESARROLLO           * 
+    / ++++++++++++++++++++++++++++++++++++++++++++ */
+
 	//Antes de nada comprobamos si el directorio ya se encuentra en la cache para evitar bucles infinitos
-	if (ctx->pos) return 0;
+	if (ctx->pos){
+		return 0;
+	} 
 
 	//Sacamos del descriptor de archivos todo lo que necesitamos:
 	inode = filp->f_path.dentry->d_inode;		//el inodo
@@ -137,14 +181,14 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
 }
 
 /* =========================================================== *
- *  Diferentes operaciones que se realizan sobre inodos  
+ *  OPERACIONES SOBRE INODOS 
  * =========================================================== */
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags);
 static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool excl);
 static int assoofs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
 
 /* =========================================================== *
- *  Estructura necesaria para manejar inodos   
+ *  OPERACIONES DE INODOS (INODE_OPS)   
  * =========================================================== */
 static struct inode_operations assoofs_inode_ops = {
     .create = assoofs_create,
@@ -153,21 +197,30 @@ static struct inode_operations assoofs_inode_ops = {
 };
 
 /* =========================================================== *
- *  Necesario para devolver inodos 
+ *  CONSECUCIÓN DE LOS INODOS QUE NECESITAMOS
  * =========================================================== */
 static struct inode *assoofs_get_inode(struct super_block *sb, int ino){
-	//DECLARAMOS ESTRUCTURAS Y VARIABLES A USAR
+
+	/* ++++++++++++++++++++++++++++++++++++++++++++ /
+	 *       DECLARACION FUNCIONES                 *
+	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct assoofs_inode_info *inode_info;
 	struct inode *inode;
 
+	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO "assoofs get inode request\n");
 
-	//PASO 1, RECOLECTAMOS INFORMACION PERSISTENTE DEL INODO
+    /* ++++++++++++++++++++++++++++++++++++++++++++ /
+     *      PROCECEMOS CON EL DESARROLLO           * 
+    / ++++++++++++++++++++++++++++++++++++++++++++ */
+
+	//PASO 1, recolectamos la información persistente del nodo
 	inode_info = assoofs_get_inode_info(sb, ino);
 
-	//ASIGNAMOS PARAMETROS AL INODO, EL CUAL HEMOS CREADO
+	//Creamos el inodo
 	inode = new_inode(sb);
 
+	//Asignamos parametros al inodo que hemos creado
 	inode->i_ino = ino;
 	inode->i_sb = sb;
 	inode->i_op = &assoofs_inode_ops;
@@ -186,7 +239,14 @@ static struct inode *assoofs_get_inode(struct super_block *sb, int ino){
 	return inode;
 }
 
+/* =========================================================== *
+ *  CONSULTA DE LOS ARCHIVOS EN UN DIRECTORIO    
+ * =========================================================== */
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags) {
+	
+	/* ++++++++++++++++++++++++++++++++++++++++++++ /
+	 *       DECLARACION FUNCIONES                 *
+	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct assoofs_inode_info *parent_info;		
 	struct super_block *sb;							
 	struct buffer_head *bh;	
@@ -194,7 +254,12 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 	struct inode *inode;												
 	int i;						//EN ESTE CASO EL BLOQUE DONDE TIENE LA INFO EL RAIZ
 
+	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO "Lookup request\n");
+
+    /* ++++++++++++++++++++++++++++++++++++++++++++ /
+     *      PROCECEMOS CON EL DESARROLLO           * 
+    / ++++++++++++++++++++++++++++++++++++++++++++ */
 
 	parent_info = parent_inode->i_private;		//SACAMOS LA INFORMACION PERSISTENTE
 	sb = parent_inode->i_sb;					//SACAMOS EL SUPERBLOQUE
@@ -219,11 +284,22 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 	return NULL;
 }
 
+/* =========================================================== *
+ *  BÚSQUEDA DE INFORMACIÓN DEL INODO    
+ * =========================================================== */
 struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, struct assoofs_inode_info *start, struct assoofs_inode_info *search){
-	//VARIABLE A USAR
+	
+	/* ++++++++++++++++++++++++++++++++++++++++++++ /
+	 *       DECLARACION FUNCIONES                 *
+	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	uint64_t count = 0;
 
+	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO "assoofs search inode info request\n");
+
+    /* ++++++++++++++++++++++++++++++++++++++++++++ /
+     *      PROCECEMOS CON EL DESARROLLO           * 
+    / ++++++++++++++++++++++++++++++++++++++++++++ */
 
 	//BUSCAMOS EL ALMACEN DE INODOS HASTA ENCONTRAR LOS DATOS DEL INDOO SEARCH
 	while (start->inode_no != search->inode_no && count < ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count) {
@@ -232,11 +308,14 @@ struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, str
 	}
 
 	if (start->inode_no == search->inode_no)
-		return start;
+		return start;  //si es el nodo que estabamos buscando lo devolvemos
 	else
-		return NULL;
+		return NULL; //si no, devolvemos null en senial de que no lo hemos encontrado
 }
 
+/* =========================================================== *
+ *  GUARDADO DE LA INFORMACION DE UN INODO    
+ * =========================================================== */
 int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *inode_info){
 	//declaracion de structs o variables que vamos a usar
 	struct buffer_head *bh;
@@ -257,6 +336,9 @@ int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 	return 0;
 }
 
+/* =========================================================== *
+ *  ADICION DE INFORMACION A UN NODO   
+ * =========================================================== */
 void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode){
 	//DECLARACION DE VARIABLES Y ESTRUCTURAS
     uint64_t inodes_count;
@@ -282,6 +364,9 @@ void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 	assoofs_save_sb_info(sb);
 }
 
+/* =========================================================== *
+ *  CONSECUCION DE UN BLOQUE LIBRE EN EL SUPERBLOQUE    
+ * =========================================================== */
 int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block){
 	struct assoofs_super_block_info *assoofs_sb;		
 	int i;					//RECORREMOS EL MAPA DE BITS EN BUSCA DE UN BLOQUE LIBRE (BIT = 1)
@@ -305,6 +390,9 @@ int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block){
 	return 0;
 }
 
+/* =========================================================== *
+ *  GUARDADO DE INFORMACION EN EL SUPERBLOQUE    
+ * =========================================================== */
 void assoofs_save_sb_info(struct super_block *vsb){
 	//DECLARAMOS LAS VARIABLES NECESARIAS PARA TRABAJAR
 	struct buffer_head *bh;				//LEEMOS DEL DISCO
@@ -323,6 +411,9 @@ void assoofs_save_sb_info(struct super_block *vsb){
 	brelse(bh);					//liberamos memoria del bufferhead
 }
 
+/* =========================================================== *
+ *  CREACION DE UN ARCHIVO    
+ * =========================================================== */
 static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool excl) {
     //DECLARAMOS LAS ESTRUCTURAS Y LAS VARIABLES A USAR EN LA FUNCION
     struct inode *inode;
@@ -392,6 +483,9 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
 	return 0;	//PARA INDICAR QUE TODO HA SALIDO BIEN
 }
 
+/* =========================================================== *
+ *  CREACION DE UN DIRECTORIO    
+ * =========================================================== */
 static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode) {
     //DECLARAMOS LAS ESTRUCTURAS Y LAS VARIABLES A USAR EN LA FUNCION
     struct inode *inode;
@@ -468,14 +562,14 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
 }
 
 /* =========================================================== *
- *  Operaciones sobre el superbloque   
+ *  OPERACIONES SOBRE EL SUPERBLOQUE  
  * =========================================================== */
 static const struct super_operations assoofs_sops = {
     .drop_inode = generic_delete_inode,
 };
 
 /* =========================================================== *
- *  Información acerca de los inodos   
+ *  CONSECUCION DE INFORMACION DE LOS INODOS   
  * =========================================================== */
 struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no){
 	//declaramos las estructuras y las variables a usar
@@ -602,7 +696,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
 }
 
 /* =========================================================== *
- *  Montaje de dispositivos assoofs     
+ *  MONTAJE DE DISPOSITIVOS ASSOOFS     
  * =========================================================== */
 static struct dentry *assoofs_mount(struct file_system_type *fs_type, int flags, const char *dev_name, void *data) {
     
@@ -616,7 +710,7 @@ static struct dentry *assoofs_mount(struct file_system_type *fs_type, int flags,
 }
 
 /* =========================================================== *
- *  assoofs file system type     
+ *  ATRIBUTOS DEL SO ASSOOFS     
  * =========================================================== */
 static struct file_system_type assoofs_type = {
     .owner   = THIS_MODULE,                            //EL MODULO MISMO
@@ -625,10 +719,9 @@ static struct file_system_type assoofs_type = {
     .kill_sb = kill_litter_super,                      //CUANDO SE DESMONTE QUE HAGA ESTO
 };
 
-/**************************************************************
-* FUNCION QUE SE EJECUTA CUANDO SE CARGA EL MODULO EN KERNEL
-***************************************************************/
-
+/* =========================================================== *
+ *  CARGA DE MODULO EN EL KERNEL    
+ * =========================================================== */
 static int __init assoofs_init(void) {
     
 	int ret;
@@ -639,10 +732,9 @@ static int __init assoofs_init(void) {
     return ret;
 }
 
-/**************************************************************
-* FUNCION QUE SE EJECUTA CUANDO SE DESMONTA EL MODULO EN KERNEL
-***************************************************************/
-
+/* =========================================================== *
+ *  DESCARGA DE MODULO EN EL KERNEL    
+ * =========================================================== */
 static void __exit assoofs_exit(void) {
     
 	int ret;
