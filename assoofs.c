@@ -202,6 +202,7 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags);
 static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool excl);
 static int assoofs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
+static int assoofs_remove(struct inode *node, struct dentry *dentry);
 
 /* =========================================================== *
  *  OPERACIONES DE INODOS (INODE_OPS)   
@@ -210,7 +211,68 @@ static struct inode_operations assoofs_inode_ops = {
     .create = assoofs_create,
     .lookup = assoofs_lookup,
     .mkdir = assoofs_mkdir,
+    .unlink = assoofs_remove,
 };
+
+/* =========================================================== *
+ *  BORRADO DE UN ARCHIVO    
+ * =========================================================== */
+/* 
+ * El procedimiento que voy a seguir para eliminar archivos es:
+ * 
+ * 		Contamos con que ya nos pasan el inodo como parametro el inodo y la dentry del inodo
+ * 
+ * 		Para borrar un archivo hay que ver si es o no directorio
+ * 			- file: Se borra el bloque, se borra del contador de inodos, borrar del dentry, se borra el inodo
+ * 			- directory: Se borran todos los ficheros que contiene el directorio, se borra el bloque, se borra 
+ *					el contador de inodos, se borra del dentry, se borra el inodo 
+ *
+ * 		Vamos a ir paso a paso especificando que hacemos para no liarnos
+ * 
+ */
+static int assoofs_remove(struct inode *node, struct dentry *dentry) {
+
+	/* ++++++++++++++++++++++++++++++++++++++++++++ /
+	 *       DECLARACION FUNCIONES                 *
+	/ ++++++++++++++++++++++++++++++++++++++++++++ */
+	struct super_block *sb;
+
+	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
+	printk(KERN_INFO "Remove file request\n"); 
+
+    /* ++++++++++++++++++++++++++++++++++++++++++++ /
+     *      PROCECEMOS CON EL DESARROLLO           * 
+    / ++++++++++++++++++++++++++++++++++++++++++++ */
+
+	//Extraemos el superbloque del nodo
+	sb = node->i_sb;
+
+	//Vamos a ver si el inodo corresponde con un archivo o con un directorio
+	if(node->i_mode == S_IFDIR){
+		//Es un directorio
+		printk(KERN_INFO "Remove: directory remove request\n");
+
+		//bucle for para cada archivo del directorio
+
+	}else{
+		//Es un archivo normal
+		printk(KERN_INFO "Remove: file remove request\n");
+	}
+
+	//borramos el bloque del nodo
+
+	//ponemos el bit del bitmap del bloque a 0
+
+	//borramos el nodo del directorio al que pertenece
+
+	//borramos el nodo del superbloque
+
+	//vaciamos el nodo
+
+	//borramos el nodo del almacen de inodos
+    
+	return 0;	//PARA INDICAR QUE TODO HA SALIDO BIEN
+}
 
 /* =========================================================== *
  *  CONSECUCIÓN DE LOS INODOS QUE NECESITAMOS
