@@ -184,9 +184,16 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
 	bh = sb_bread(sb, inode_info->data_block_number);			//leemos en disco
 	record = (struct assoofs_dir_record_entry *)bh->b_data;		//el contenido que queriamos estaba en data y hay que castearlo
 	for (i = 0; i < inode_info->dir_children_count; i++) {		//recorremos todos los hijos que tiene el directorio
-		dir_emit(ctx, record->filename, ASSOOFS_FILENAME_MAXLEN, record->inode_no, DT_UNKNOWN);		//Inicializando el contexto con los datos del directorio
+		
+		//----------------------------  PARTE NECESARIA PARA QUE EL REMOVE FUNCIONE BIEN ---------------------------------------- //
+		if(record->state_flag == ALIVE){
+			dir_emit(ctx, record->filename, ASSOOFS_FILENAME_MAXLEN, record->inode_no, DT_UNKNOWN);		//Inicializando el contexto con los datos del directorio
+		}else{
+			i--;			//con esto conseguimos que si hay algun nodo que no esta vivo, y deberia estar muerto
+							//que no lo muestre y que no cuente esa iteracion como si fuera uno de sus hijos
+		}
 		ctx->pos += sizeof(struct assoofs_dir_record_entry);										//Incrementamos el valor del puntero pos, se inicializa con 0, pero lo voy a aumentar tanto como ocupe un record entry
-		record++;																					//Aumento el valor del puntero record
+		record++;																				//Aumento el valor del puntero record
 	}
 
 	//Liberamos la memoria del bufferhead
@@ -223,25 +230,25 @@ static struct inode_operations assoofs_inode_ops = {
  * 		Contamos con que ya nos pasan el inodo como parametro el inodo y la dentry del inodo
  * 
  * 		Para borrar un archivo hay que:
- *			- Se borra el bloque
- *			- se borra del contador de inodos
- *			- borrar del dentry
- *			- se borra el inodo
- * 			
+ *			- Borrar el contador del superbloque
+ * 			- Borrar el contador del padre y su dir record entry
+ *			- Borrar el inodo y actualizar el mapa de bits
  *
  * 		Vamos a ir paso a paso especificando que hacemos para no liarnos
  * 
  */
-static int assoofs_remove(struct inode *inode, struct dentry *dentry) {
+static int assoofs_remove(struct inode *dir, struct dentry *dentry) {
 
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
 	 *       DECLARACION FUNCIONES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct super_block *sb;
 	struct assoofs_super_block_info *super_info;
-	struct inode *parent_inode;
-	struct inode *remove_inode;
-	struct assoofs_inode_info *parent_info;
+	struct inode *inode;
+	struct assoofs_inode_info *parent_inode_info, *inode_info;
+	struct assoofs_dir_record_entry *record;
+	struct buffer_head *bh;
+	int i;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO "Remove file request\n"); 
@@ -250,37 +257,71 @@ static int assoofs_remove(struct inode *inode, struct dentry *dentry) {
      *      PROCECEMOS CON EL DESARROLLO           * 
     / ++++++++++++++++++++++++++++++++++++++++++++ */
 
-	parent_inode = inode;
-	remove_inode = dentry->d_inode;
+	inode = dentry->d_inode;		//cogemos el nodo del dentry
+	inode_info = inode->i_private;	//cogemos la informacion del inodo del campo i_private
+	printk(KERN_INFO "Remove: inode to remove: %llu\n", inode_info->data_block_number);		//informamos con una traza de que inodo vamos a eliminar
 
-	//Extraemos el superbloque del nodo
+	//Extraemos el superbloque del nodo del padre
 	printk(KERN_INFO "Remove: obtaining the superblock\n");
-	sb = inode->i_sb;
+	sb = dir->i_sb;
+	
+	//Decrementamos el contador de inodos del superbloque
+	printk(KERN_INFO "Remove: decreasing superblock inodes_count\n");
+	super_info = sb->s_fs_info;
+	super_info->inodes_count--;
+
+	//Antes de guardar el superbloque actualizamos el mapa de bits
+	printk(KERN_INFO "Remove: changing the bitmap\n");
+	printk(KERN_INFO "BITMAP ORIGINAL: %llu\n", super_info->free_blocks);
+	super_info->free_blocks |= (1 << inode_info->data_block_number);
+	printk(KERN_INFO "BITMAP CHANGED: %llu\n", super_info->free_blocks);
+
+	//guardamos la informacion persistente en el superbloque
+	printk(KERN_INFO "Remove: saving sb\n");
+	assoofs_save_sb_info(sb);
 
 	//decrementamos el contador del padre
-	//parent_info = parent_inode->i_private;
-	//parent_info->dir_children_count--;
-	//printk(KERN_INFO "Remove: reducing the parent's children\n");
-	//assoofs_save_inode_info(sb, parent_info);
+	parent_inode_info = dir->i_private;
+	printk(KERN_INFO "Remove: reducing the parent's children\n");
+	printk(KERN_INFO "CHILDREN: %llu\n", parent_inode_info->dir_children_count);
+	parent_inode_info->dir_children_count--;
+	printk(KERN_INFO "NEW CHILDREN: %llu\n", parent_inode_info->dir_children_count);
+	printk(KERN_INFO "Remove: saving the parent_inode_info to memory\n");
+	assoofs_save_inode_info(sb, parent_inode_info);
 
-	//Lo borramos del dentry
-	printk(KERN_INFO "Remove: simple unlink\n");
-	simple_unlink(inode, dentry);
+	//actualizamos el campo de tiempo del inodo
+	inode->i_ctime = dir->i_ctime = dir->i_mtime = current_time(inode);
 
-	//Destruimos el inodo
-	//printk(KERN_INFO "Remove: clear_inode\n");
-	//clear_inode(remove_inode);			//Borramos el bloque al que pertenece el nodo
-	printk(KERN_INFO "Remove: destroy_inode\n");
-	__destroy_inode(remove_inode);
+	//modificar la record entry para que aparezca como eliminado
+	bh = sb_bread(sb, parent_inode_info->data_block_number);//PARA LEER LA INFO DEL BLOQUE PADRE
 
-	//Decrementamos el contador de inodos del superbloque
-	//printk(KERN_INFO "Remove: decreasing superblock inodes_count\n");
-	//super_info = sb->s_fs_info;
-	//super_info->inodes_count--;
+	printk(KERN_INFO "SB_BREAD in: ino=%llu, b=%llu\n", parent_inode_info->inode_no, parent_inode_info->data_block_number);
 
-	//me falta borrarlo del bitmap--------------------------------------
-	//printk(KERN_INFO "Remove: saving sb\n");
-	//assoofs_save_sb_info(sb);
+	//voy a recorrerlos records dentro del directorio
+	record = (struct assoofs_dir_record_entry *)bh->b_data;
+
+	for (i=0; i < parent_inode_info->dir_children_count; i++) {
+
+		//----------------------------  PARTE NECESARIA PARA QUE EL REMOVE FUNCIONE BIEN ---------------------------------------- //
+		if(record->state_flag == ALIVE){
+
+			printk(KERN_INFO "ALIVE FILE: '%s' (ino=%llu)\n", record->filename, record->inode_no);
+
+			if(record->inode_no == dentry->d_inode->i_ino){
+				record->state_flag = REMOVED;
+				printk(KERN_INFO "NEW REMOVED FILE: '%s' (ino=%llu)\n", record->filename, record->inode_no);
+				break;
+			}
+		}else{
+			printk(KERN_INFO "ALREADY REMOVED: '%s' (ino=%llu)\n", record->filename, record->inode_no);
+			i--;			//con esto conseguimos que si hay algun nodo que no esta vivo, y deberia estar muerto
+							//que no lo muestre y que no cuente esa iteracion como si fuera uno de sus hijos
+		}
+		record++;
+	}
+
+	d_drop(dentry);
+	brelse(bh);
     
 	return 0;	//PARA INDICAR QUE TODO HA SALIDO BIEN
 }
@@ -359,12 +400,20 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 	//voy a recorrerlos records dentro del directorio
 	record = (struct assoofs_dir_record_entry *)bh->b_data;
 	for (i=0; i < parent_info->dir_children_count; i++) {
-		printk(KERN_INFO "Have file: '%s' (ino=%llu)\n", record->filename, record->inode_no);
-		if (!strcmp(record->filename, child_dentry->d_name.name)) {		//COMPROBAR INFO DEL FICHERO CON EL QUE NOS PASAN (0 SI SON IGUALES, !=0 SI NO SON IGUALES)
-			inode = assoofs_get_inode(sb, record->inode_no); // Función auxiliar que obtine la información de un inodo a partir de su número de inodo.
-			inode_init_owner(inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);	//OBTENER LA INFO DE ESE INODO
-			d_add(child_dentry, inode);		//GUARDAR LA INFO EN MEMORIA DEL FICHERO
-			return NULL;
+
+		//----------------------------  PARTE NECESARIA PARA QUE EL REMOVE FUNCIONE BIEN ---------------------------------------- //
+		if(record->state_flag == ALIVE){
+			printk(KERN_INFO "Have file: '%s' (ino=%llu)\n", record->filename, record->inode_no);
+			if (!strcmp(record->filename, child_dentry->d_name.name)) {		//COMPROBAR INFO DEL FICHERO CON EL QUE NOS PASAN (0 SI SON IGUALES, !=0 SI NO SON IGUALES)
+				inode = assoofs_get_inode(sb, record->inode_no); //assoofs_dir_record_entry Función auxiliar que obtine la información de un inodo a partir de su número de inodo.
+				inode_init_owner(inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);	//OBTENER LA INFO DE ESE INODO
+				d_add(child_dentry, inode);		//GUARDAR LA INFO EN MEMORIA DEL FICHERO
+				return NULL;
+			}
+		}else{
+			printk(KERN_INFO "Have file removed: '%s' (ino=%llu)\n", record->filename, record->inode_no);
+			i--;			//con esto conseguimos que si hay algun nodo que no esta vivo, y deberia estar muerto
+							//que no lo muestre y que no cuente esa iteracion como si fuera uno de sus hijos
 		}
 		record++;
 	}
@@ -635,6 +684,9 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
 	strcpy(dir_contents->filename, dentry->d_name.name);
 										//Tenemos que copiar el nombre del fichero
 	
+	//----------------------------  PARTE NECESARIA PARA QUE EL REMOVE FUNCIONE BIEN ---------------------------------------- //
+	dir_contents->state_flag = ALIVE;
+
 	//Escribir en disco
 	mark_buffer_dirty(bh);		//PONEMOS EL BIT A SUCIO
 	sync_dirty_buffer(bh);		//FORZAMOS LA SINCRONIZACION. Todos los cambios que esten en dirty, se trasladaran a disco
@@ -731,6 +783,9 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
 	strcpy(dir_contents->filename, dentry->d_name.name);
 										//Tenemos que copiar el nombre del fichero
 	
+	//----------------------------  PARTE NECESARIA PARA QUE EL REMOVE FUNCIONE BIEN ---------------------------------------- //
+	dir_contents->state_flag = ALIVE;
+
 	//Escribir en disco
 	mark_buffer_dirty(bh);		//PONEMOS EL BIT A SUCIO
 	sync_dirty_buffer(bh);		//FORZAMOS LA SINCRONIZACION. Todos los cambios que esten en dirty, se trasladaran a disco

@@ -9,6 +9,10 @@ const int ASSOOFS_ROOTDIR_BLOCK_NUMBER = 2;
 const int ASSOOFS_ROOTDIR_INODE_NUMBER = 1;
 const int ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED = 64;
 
+//FLAGS PARA EL DIR RECORD ENTRY, PARA QUE SEPA SI TIENE QUE MOSTRARLO O NO
+#define REMOVED 0
+#define ALIVE 1
+
 struct assoofs_super_block_info {
     uint64_t version;
     uint64_t magic;
@@ -21,6 +25,7 @@ struct assoofs_super_block_info {
 struct assoofs_dir_record_entry {
     char filename[ASSOOFS_FILENAME_MAXLEN];
     uint64_t inode_no;
+    uint64_t state_flag;
 };
 
 struct assoofs_inode_info {
