@@ -12,6 +12,7 @@
 
 //Voy a configurar algunas variables para hacer printf con algun color, para que las trazas queden mas visuales
 
+#define R_C "\x1b[0m"		//Reset color
 #define R 	"\x1b[31m"		//Red
 #define G   "\x1b[32m"		//Green
 #define Y	"\x1b[33m"		//Yellow
@@ -25,7 +26,7 @@ static DEFINE_MUTEX(assoofs_inodes_block_lock);
 static struct kmem_cache *assoofs_inode_cache;
 
 /* ++++++++++++++++++++++++++++++++++++++++++++ /
- *       DECLARACION FUNCIONES                 *
+ *       DECLARACION VARIABLES                 *
 / ++++++++++++++++++++++++++++++++++++++++++++ */
 static struct inode *assoofs_get_inode(struct super_block *sb, int ino);
 struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no);
@@ -59,7 +60,7 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
 	int nbytes;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Read request\n");
+	printk(KERN_INFO B "Read request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -70,7 +71,7 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
 
     //Para comprobar si hemos o no llegado al final del fichero
     if (*ppos >= inode_info->file_size){
-    	printk(KERN_INFO R "READ: EOF reached\n");
+    	printk(KERN_INFO R "READ: EOF reached\n" R_C);
     	return 0;   
     }
 
@@ -81,12 +82,12 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
 
 	// Hay que comparar len con el tamanio del fichero por si llegamos al final del fichero
 	nbytes = min((size_t) inode_info->file_size, len); 
-	printk(KERN_INFO Y "TEXT READ: %s\n", buffer);
+	printk(KERN_INFO Y "TEXT READ: %s\n" R_C, buffer);
 	copy_to_user(buf, buffer, nbytes);
 
 	*ppos += nbytes;		//incrementamos ppos
 	brelse(bh);				//liberamos memoria del bufferhead
-	printk(KERN_INFO Y "BYTES READ: %d\n", nbytes);		//imprimios una traza de lectura
+	printk(KERN_INFO Y "BYTES READ: %d\n" R_C, nbytes);		//imprimios una traza de lectura
 	return nbytes;			//devolvemos el numero de bytes leidos
 }
 
@@ -104,7 +105,7 @@ ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, l
 	struct super_block *sb;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Write request\n");
+	printk(KERN_INFO B "Write request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -128,8 +129,8 @@ ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, l
 		return -1;
 	}
 
-	printk(KERN_INFO Y "TEXT WRITTEN: %s\n", buffer);
-	printk(KERN_INFO Y "BYTES WRITTEN: %ld\n", len);		//imprimios una traza de lectura
+	printk(KERN_INFO Y "TEXT WRITTEN: %s\n" R_C, buffer);
+	printk(KERN_INFO Y "BYTES WRITTEN: %ld\n" R_C, len);		//imprimios una traza de lectura
 
 	*ppos+=len; //actualizamos el puntero ppos
 
@@ -163,7 +164,7 @@ const struct file_operations assoofs_dir_operations = {
 static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
     
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
     struct inode *inode;
 	struct super_block *sb;
@@ -173,7 +174,7 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
 	int i;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Iterate request\n");
+	printk(KERN_INFO B "Iterate request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -181,7 +182,7 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
 
 	//Antes de nada comprobamos si el directorio ya se encuentra en la cache para evitar bucles infinitos
 	if (ctx->pos){
-		printk(KERN_INFO R "The directory already is at the cache\n");
+		printk(KERN_INFO R "The directory already is at the cache\n" R_C);
 		return 0;
 	} 
 
@@ -198,16 +199,16 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
 	bh = sb_bread(sb, inode_info->data_block_number);			//leemos en disco
 	record = (struct assoofs_dir_record_entry *)bh->b_data;		//el contenido que queriamos estaba en data y hay que castearlo
 
-	printk(KERN_INFO Y "Directory: reading all the dir_record_entries\n");
+	printk(KERN_INFO "Directory: reading all the dir_record_entries\n");
 
 	for (i = 0; i < inode_info->dir_children_count; i++) {		//recorremos todos los hijos que tiene el directorio
 		
 		//----------------------------  PARTE NECESARIA PARA QUE EL REMOVE FUNCIONE BIEN ---------------------------------------- //
 		if(record->state_flag == ALIVE){
-			printk(KERN_INFO Y "FILE: Name: '%s' Inode_Number: %llu State_Flag: " G "ALIVE\n", record->filename, record->inode_no);
+			printk(KERN_INFO Y "FILE: Name: '%s' Inode_Number: %llu State_Flag: " G "ALIVE\n" R_C, record->filename, record->inode_no);
 			dir_emit(ctx, record->filename, ASSOOFS_FILENAME_MAXLEN, record->inode_no, DT_UNKNOWN);		//Inicializando el contexto con los datos del directorio
 		}else{
-			printk(KERN_INFO Y "FILE: Name: '%s' Inode_Number: %llu State_Flag: " R "REMOVED\n", record->filename, record->inode_no);
+			printk(KERN_INFO Y "FILE: Name: '%s' Inode_Number: %llu State_Flag: " R "REMOVED\n" R_C, record->filename, record->inode_no);
 			i--;			//con esto conseguimos que si hay algun nodo que no esta vivo, y deberia estar muerto
 							//que no lo muestre y que no cuente esa iteracion como si fuera uno de sus hijos
 		}
@@ -228,7 +229,8 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags);
 static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool excl);
 static int assoofs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
-static int assoofs_remove(struct inode *node, struct dentry *dentry);
+static int assoofs_remove(struct inode *dir, struct dentry *dentry);
+static int assoofs_move(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir, struct dentry *new_dentry, unsigned int num);
 
 /* =========================================================== *
  *  OPERACIONES DE INODOS (INODE_OPS)   
@@ -238,6 +240,7 @@ static struct inode_operations assoofs_inode_ops = {
     .lookup = assoofs_lookup,
     .mkdir = assoofs_mkdir,
     .unlink = assoofs_remove,
+    .rename = assoofs_move,
 };
 
 /* =========================================================== *
@@ -259,7 +262,7 @@ static struct inode_operations assoofs_inode_ops = {
 static int assoofs_remove(struct inode *dir, struct dentry *dentry) {
 
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct super_block *sb;
 	struct assoofs_super_block_info *super_info;
@@ -270,7 +273,7 @@ static int assoofs_remove(struct inode *dir, struct dentry *dentry) {
 	int i;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Remove file request\n"); 
+	printk(KERN_INFO B "Remove file request\n" R_C); 
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -324,15 +327,15 @@ static int assoofs_remove(struct inode *dir, struct dentry *dentry) {
 		//----------------------------  PARTE NECESARIA PARA QUE EL REMOVE FUNCIONE BIEN ---------------------------------------- //
 		if(record->state_flag == ALIVE){
 
-			printk(KERN_INFO G "ALIVE FILE: '%s' (ino=%llu)\n", record->filename, record->inode_no);
+			printk(KERN_INFO G "ALIVE FILE: '%s' (ino=%llu)\n" R_C, record->filename, record->inode_no);
 
 			if(record->inode_no == dentry->d_inode->i_ino){
 				record->state_flag = REMOVED;
-				printk(KERN_INFO B "NEW REMOVED FILE: '%s' (ino=%llu)\n", record->filename, record->inode_no);
+				printk(KERN_INFO B "NEW REMOVED FILE: '%s' (ino=%llu)\n" R_C, record->filename, record->inode_no);
 				break;
 			}
 		}else{
-			printk(KERN_INFO R "ALREADY REMOVED: '%s' (ino=%llu)\n", record->filename, record->inode_no);
+			printk(KERN_INFO R "ALREADY REMOVED: '%s' (ino=%llu)\n" R_C, record->filename, record->inode_no);
 			i--;			//con esto conseguimos que si hay algun nodo que no esta vivo, y deberia estar muerto
 							//que no lo muestre y que no cuente esa iteracion como si fuera uno de sus hijos
 		}
@@ -346,18 +349,52 @@ static int assoofs_remove(struct inode *dir, struct dentry *dentry) {
 }
 
 /* =========================================================== *
+ *  MOVIMIENTO DE UN ARCHIVO DE SITIO
+ * =========================================================== */
+/* 
+ * El metodo para mover a un archivo de sitio consiste en lo siguiente
+ * 
+ * 		- Buscar el archivo en el almacen de inodos
+ * 		- Copiar su dir_record_entry dentro del record del nuevo directorio
+ *			- Decrementar los hijos del anterior directorio y aumentar los del siguiente
+ * 		- Aplicar remove sobre el anterior enlace al archivo
+ * 
+ * 		No va a hacer falta crear un nuevo nodo, ni decrementar el superbloque
+ * 
+ */
+static int assoofs_move(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir, struct dentry *new_dentry, unsigned int num){
+
+	/* ++++++++++++++++++++++++++++++++++++++++++++ /
+	 *       DECLARACION VARIABLES                 *
+	/ ++++++++++++++++++++++++++++++++++++++++++++ */
+
+	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
+	printk(KERN_INFO B "Move inode request\n" R_C);
+
+	/* ++++++++++++++++++++++++++++++++++++++++++++ /
+     *      PROCECEMOS CON EL DESARROLLO           * 
+    / ++++++++++++++++++++++++++++++++++++++++++++ */
+	printk(KERN_INFO G "OLD inode inode: %ld\n" R_C, old_dir->i_ino);
+	printk(KERN_INFO G "OLD Dentry inode: %ld\n" R_C, old_dentry->d_inode->i_ino);
+	printk(KERN_INFO G "NEW inode inode: %ld\n" R_C, new_dir->i_ino);
+	printk(KERN_INFO G "NEW Dentry inode: %ld\n" R_C, new_dentry->d_inode->i_ino);
+	printk(KERN_INFO G "Number: %d\n" R_C, num);
+	return 0;
+}
+
+/* =========================================================== *
  *  CONSECUCIÓN DE LOS INODOS QUE NECESITAMOS
  * =========================================================== */
 static struct inode *assoofs_get_inode(struct super_block *sb, int ino){
 
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct assoofs_inode_info *inode_info;
 	struct inode *inode;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Get inode request\n");
+	printk(KERN_INFO B "Get inode request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -397,7 +434,7 @@ static struct inode *assoofs_get_inode(struct super_block *sb, int ino){
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags) {
 	
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct assoofs_inode_info *parent_info;		
 	struct super_block *sb;							
@@ -407,7 +444,7 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 	int i;						//EN ESTE CASO EL BLOQUE DONDE TIENE LA INFO EL RAIZ
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Lookup request\n");
+	printk(KERN_INFO B "Lookup request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -433,7 +470,7 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 				return NULL;
 			}
 		}else{
-			printk(KERN_INFO R "Have file removed: '%s' (ino=%llu)\n", record->filename, record->inode_no);
+			printk(KERN_INFO R "Have file removed: '%s' (ino=%llu)\n" R_C, record->filename, record->inode_no);
 			i--;			//con esto conseguimos que si hay algun nodo que no esta vivo, y deberia estar muerto
 							//que no lo muestre y que no cuente esa iteracion como si fuera uno de sus hijos
 		}
@@ -450,12 +487,12 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
 struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, struct assoofs_inode_info *start, struct assoofs_inode_info *search){
 	
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	uint64_t count = 0;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Search inode info request\n");
+	printk(KERN_INFO B "Search inode info request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -468,11 +505,11 @@ struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, str
 	}
 
 	if (start->inode_no == search->inode_no){
-		printk(KERN_INFO G "Node_information (ino_no: %llu) found\n", start->inode_no);
+		printk(KERN_INFO "Node_information (ino_no: %llu) found\n", start->inode_no);
 		return start;  //si es el nodo que estabamos buscando lo devolvemos
 	}
 	else{
-		printk(KERN_INFO R "Node_information not found\n");
+		printk(KERN_INFO "Node_information not found\n");
 		return NULL; //si no, devolvemos null en senial de que no lo hemos encontrado
 	}
 }
@@ -483,13 +520,13 @@ struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, str
 int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *inode_info){
 	
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct buffer_head *bh;
 	struct assoofs_inode_info *inode_pos;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Save inode info request\n");
+	printk(KERN_INFO B "Save inode info request\n" R_C);
 
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -506,7 +543,7 @@ int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 	memcpy(inode_pos, inode_info, sizeof(*inode_pos));    //METEMOS LA INFORMACION EN LA INFORMACION DEL INODO
 	mark_buffer_dirty(bh);		//LO MARCAMOS COMO SUCIO
 	sync_dirty_buffer(bh);		//SINCRONIZAMOS
-	printk(KERN_INFO G "Node_Info saved correctly\n");
+	printk(KERN_INFO "Node_Info saved correctly\n");
 	brelse(bh);					//liberamos memoria del bufferhead
 
 	mutex_unlock(&assoofs_sb_lock);
@@ -520,7 +557,7 @@ int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode){
 	
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
     uint64_t inodes_count;
 	struct buffer_head *bh;
@@ -528,7 +565,7 @@ void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 	struct assoofs_super_block_info *assoofs_sb = sb->s_fs_info;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Add inode info request\n");
+	printk(KERN_INFO B "Add inode info request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -551,7 +588,7 @@ void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 
 	mark_buffer_dirty(bh);		//LO MARCAMOS COMO SUCIO
 	sync_dirty_buffer(bh);		//SINCRONIZAMOS
-	printk(KERN_INFO G "Node_Info added correctly\n");
+	printk(KERN_INFO "Node_Info added correctly\n");
 	brelse(bh);					//liberamos memoria del bufferhead
 
 	assoofs_sb->inodes_count++;		
@@ -567,13 +604,13 @@ void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block){
 	
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct assoofs_super_block_info *assoofs_sb;		
 	int i;					
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Get a free block request\n");
+	printk(KERN_INFO B "Get a free block request\n" R_C);
 
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -609,13 +646,13 @@ int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *block){
 void assoofs_save_sb_info(struct super_block *vsb){
 	
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct buffer_head *bh;				//LEEMOS DEL DISCO
 	struct assoofs_super_block *sb;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Save sb info request\n");
+	printk(KERN_INFO B "Save sb info request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -629,7 +666,7 @@ void assoofs_save_sb_info(struct super_block *vsb){
 	//Escribir en disco
 	mark_buffer_dirty(bh);		//PONEMOS EL BIT A SUCIO
 	sync_dirty_buffer(bh);		//FORZAMOS LA SINCRONIZACION. Todos los cambios que esten en dirty, se trasladaran a disco
-	printk(KERN_INFO G "Super_Block_Info saved correctly\n");
+	printk(KERN_INFO "Super_Block_Info saved correctly\n");
 	brelse(bh);					//liberamos memoria del bufferhead
 }
 
@@ -639,7 +676,7 @@ void assoofs_save_sb_info(struct super_block *vsb){
 static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool excl) {
 
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
     struct inode *inode;
     struct super_block *sb;
@@ -650,7 +687,7 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
 	struct buffer_head *bh;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "New file request\n"); 
+	printk(KERN_INFO B "New file request\n" R_C); 
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -671,7 +708,7 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
     	return -1;
     }
 
-    printk(KERN_INFO Y "Node created correctly\n");
+    printk(KERN_INFO "Node created correctly\n");
 
     inode = new_inode(sb);
     //inode->i_ino = (count + ASSOOFS_START_INO - ASSOOFS_RESERVED_INODES + 1);
@@ -688,7 +725,7 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
     //inode_info = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
     	//ESTA ES LA MANERA CON CACHE DE INODOS
     inode_info = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);	
-    printk(KERN_INFO Y "Space in cache reserved correctly\n");
+    printk(KERN_INFO "Space in cache reserved correctly\n");
 
     inode_info->inode_no = inode->i_ino;		
     inode_info->mode = mode;
@@ -722,7 +759,7 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
 	//Escribir en disco
 	mark_buffer_dirty(bh);		//PONEMOS EL BIT A SUCIO
 	sync_dirty_buffer(bh);		//FORZAMOS LA SINCRONIZACION. Todos los cambios que esten en dirty, se trasladaran a disco
-	printk(KERN_INFO G "Node created and stored correctly\n");
+	printk(KERN_INFO "Node created and stored correctly\n");
 	brelse(bh);					//liberamos memoria del bufferhead
 
 	//-----------------------  MUTEX DEL ALMACEN DE INODOS  -------------------------//
@@ -742,7 +779,7 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
 static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode) {
 
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
     struct inode *inode;
     struct super_block *sb;
@@ -753,7 +790,7 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
 	struct buffer_head *bh;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "New directory request\n");
+	printk(KERN_INFO B "New directory request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -769,7 +806,7 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
     }
 
     inode = new_inode(sb);
-    printk(KERN_INFO Y "Node created correctly\n");
+    printk(KERN_INFO "Node created correctly\n");
     //inode->i_ino = (count + ASSOOFS_START_INO - ASSOOFS_RESERVED_INODES + 1);
     						//ASIGNO UN NUMERO AL NUEVO INODO A PARTIR DE COUNT
     inode->i_ino = count+1;
@@ -784,7 +821,7 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
     //inode_info = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
     	//ESTA ES LA MANERA CON CACHE DE INODOS
     inode_info = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);
-    printk(KERN_INFO Y "Space in cache reserved correctly\n");	
+    printk(KERN_INFO "Space in cache reserved correctly\n");	
 
     inode_info->inode_no = inode->i_ino;		
     //inode_info->mode = mode;
@@ -824,7 +861,7 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
 	//Escribir en disco
 	mark_buffer_dirty(bh);		//PONEMOS EL BIT A SUCIO
 	sync_dirty_buffer(bh);		//FORZAMOS LA SINCRONIZACION. Todos los cambios que esten en dirty, se trasladaran a disco
-	printk(KERN_INFO G "Node created and stored correctly\n");
+	printk(KERN_INFO "Node created and stored correctly\n");
 	brelse(bh);					//liberamos memoria del bufferhead
 
 	parent_inode_info->dir_children_count++;			//AUMENTAMOS EN UNO ELCONTADOR DE HIJOS DEL PADRE
@@ -846,7 +883,7 @@ static const struct super_operations assoofs_sops = {
 struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no){
 
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct assoofs_super_block_info *afs_sb = sb->s_fs_info;
 	struct assoofs_inode_info *inode_info = NULL;
@@ -855,7 +892,7 @@ struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64
 	struct buffer_head *bh;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO B "Get inode info request\n");
+	printk(KERN_INFO B "Get inode info request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -869,7 +906,7 @@ struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64
 	for(i = 0; i < afs_sb->inodes_count; i++){
 		if(inode_info->inode_no == inode_no){  //he encontrado el nodo por el que me preguntan
 			
-			printk(KERN_INFO G "Node found\n");
+			printk(KERN_INFO "Node found\n");
 				//ESTA ES LA MANERA SIN CACHE DE INODOS
     		//buffer = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
     			//ESTA ES LA MANERA CON CACHE DE INODOS
@@ -893,14 +930,14 @@ struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64
 int assoofs_fill_super(struct super_block *sb, void *data, int silent) {   
    
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct inode *root_inode;									//AQUÍ VAMOS A GUARDAR EL INODO DEL ROOT
 	struct buffer_head *bh; 									//Aquí tendremos toda la información de un bloque
     struct assoofs_super_block_info *assoofs_sb;				//Puntero al superbloque (info) 
 
     //IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-    printk(KERN_INFO B "Fill_super request\n");
+    printk(KERN_INFO B "Fill_super request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -912,7 +949,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     	   *       LEER BLOQUES DE DISCO              * /
     	/ ++++++++++++++++++++++++++++++++++++++++++++ */ 
 
-    printk(KERN_INFO Y "Reading the blocks in the disk\n");
+    printk(KERN_INFO "Reading the blocks in the disk\n");
     bh = sb_bread(sb, ASSOOFS_SUPERBLOCK_BLOCK_NUMBER);			//Llamada a sb_bread, superbloque block read (superbloque, numero de bloque del superbloque)
     assoofs_sb = (struct assoofs_super_block_info *)bh->b_data; //Sacar el contenido del bloque (b_data)(Campo binario) (Meto en assoofs_sb la info del superbloque)
     			//Hacemos el cast para que se identifiquen los campos de info del superbloque	
@@ -924,7 +961,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     	/* ++++++++++++++++++++++++++++++++++++++++++++ /
     	   *         COMPROBAR PARAMETROS             * /
     	/ ++++++++++++++++++++++++++++++++++++++++++++ */ 
-    printk(KERN_INFO Y "Checking parameters\n");
+    printk(KERN_INFO "Checking parameters\n");
     printk(KERN_INFO "The magic number obtained in disk is %llu\n", assoofs_sb->magic);
     //if(unlikely(assoofs_sb->magic != ASSOOFS_MAGIC)){
      if(assoofs_sb->magic != ASSOOFS_MAGIC){
@@ -998,12 +1035,12 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
 static struct dentry *assoofs_mount(struct file_system_type *fs_type, int flags, const char *dev_name, void *data) {
     
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */	
 	struct dentry *ret;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-    printk(KERN_INFO B "Mount request\n");
+    printk(KERN_INFO B "Mount request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -1030,12 +1067,12 @@ static struct file_system_type assoofs_type = {
 static int __init assoofs_init(void) {
     
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	int ret;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-    printk(KERN_INFO B "Init request\n");
+    printk(KERN_INFO B "Init request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -1055,12 +1092,12 @@ static int __init assoofs_init(void) {
 static void __exit assoofs_exit(void) {
 
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
-	 *       DECLARACION FUNCIONES                 *
+	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	int ret;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-    printk(KERN_INFO B "Exit request\n");
+    printk(KERN_INFO B "Exit request\n" R_C);
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
