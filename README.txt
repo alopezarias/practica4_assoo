@@ -13,3 +13,4 @@ extras:
 	- Cache de inodos
 	- Semaforos en las escrituras del superbloque
 	- Semaforos en las escrituras del almacen de inodos
+	- Funcion de rm para borrar ficheros
