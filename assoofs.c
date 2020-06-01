@@ -258,29 +258,29 @@ static int assoofs_remove(struct inode *inode, struct dentry *dentry) {
 	sb = inode->i_sb;
 
 	//decrementamos el contador del padre
-	parent_info = parent_inode->i_private;
-	parent_info->dir_children_count--;
-	printk(KERN_INFO "Remove: reducing the parent's children\n");
-	assoofs_save_inode_info(sb, parent_info);
+	//parent_info = parent_inode->i_private;
+	//parent_info->dir_children_count--;
+	//printk(KERN_INFO "Remove: reducing the parent's children\n");
+	//assoofs_save_inode_info(sb, parent_info);
 
 	//Lo borramos del dentry
 	printk(KERN_INFO "Remove: simple unlink\n");
 	simple_unlink(inode, dentry);
 
-	//Decrementamos el contador de inodos del superbloque
-	printk(KERN_INFO "Remove: decreasing superblock inodes_count\n");
-	super_info = sb->s_fs_info;
-	super_info->inodes_count--;
-
-	//me falta borrarlo del bitmap--------------------------------------
-	printk(KERN_INFO "Remove: saving sb\n");
-	assoofs_save_sb_info(sb);
-
 	//Destruimos el inodo
-	printk(KERN_INFO "Remove: clear_inode\n");
-	clear_inode(remove_inode);			//Borramos el bloque al que pertenece el nodo
+	//printk(KERN_INFO "Remove: clear_inode\n");
+	//clear_inode(remove_inode);			//Borramos el bloque al que pertenece el nodo
 	printk(KERN_INFO "Remove: destroy_inode\n");
 	__destroy_inode(remove_inode);
+
+	//Decrementamos el contador de inodos del superbloque
+	//printk(KERN_INFO "Remove: decreasing superblock inodes_count\n");
+	//super_info = sb->s_fs_info;
+	//super_info->inodes_count--;
+
+	//me falta borrarlo del bitmap--------------------------------------
+	//printk(KERN_INFO "Remove: saving sb\n");
+	//assoofs_save_sb_info(sb);
     
 	return 0;	//PARA INDICAR QUE TODO HA SALIDO BIEN
 }
