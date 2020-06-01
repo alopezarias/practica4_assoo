@@ -222,20 +222,26 @@ static struct inode_operations assoofs_inode_ops = {
  * 
  * 		Contamos con que ya nos pasan el inodo como parametro el inodo y la dentry del inodo
  * 
- * 		Para borrar un archivo hay que ver si es o no directorio
- * 			- file: Se borra el bloque, se borra del contador de inodos, borrar del dentry, se borra el inodo
- * 			- directory: Se borran todos los ficheros que contiene el directorio, se borra el bloque, se borra 
- *					el contador de inodos, se borra del dentry, se borra el inodo 
+ * 		Para borrar un archivo hay que:
+ *			- Se borra el bloque
+ *			- se borra del contador de inodos
+ *			- borrar del dentry
+ *			- se borra el inodo
+ * 			
  *
  * 		Vamos a ir paso a paso especificando que hacemos para no liarnos
  * 
  */
-static int assoofs_remove(struct inode *node, struct dentry *dentry) {
+static int assoofs_remove(struct inode *inode, struct dentry *dentry) {
 
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
 	 *       DECLARACION FUNCIONES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	struct super_block *sb;
+	struct assoofs_super_block_info *super_info;
+	struct inode *parent_inode;
+	struct inode *remove_inode;
+	struct assoofs_inode_info *parent_info;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO "Remove file request\n"); 
@@ -244,32 +250,37 @@ static int assoofs_remove(struct inode *node, struct dentry *dentry) {
      *      PROCECEMOS CON EL DESARROLLO           * 
     / ++++++++++++++++++++++++++++++++++++++++++++ */
 
+	parent_inode = inode;
+	remove_inode = dentry->d_inode;
+
 	//Extraemos el superbloque del nodo
-	sb = node->i_sb;
+	printk(KERN_INFO "Remove: obtaining the superblock\n");
+	sb = inode->i_sb;
 
-	//Vamos a ver si el inodo corresponde con un archivo o con un directorio
-	if(node->i_mode == S_IFDIR){
-		//Es un directorio
-		printk(KERN_INFO "Remove: directory remove request\n");
+	//decrementamos el contador del padre
+	parent_info = parent_inode->i_private;
+	parent_info->dir_children_count--;
+	printk(KERN_INFO "Remove: reducing the parent's children\n");
+	assoofs_save_inode_info(sb, parent_info);
 
-		//bucle for para cada archivo del directorio
+	//Lo borramos del dentry
+	printk(KERN_INFO "Remove: simple unlink\n");
+	simple_unlink(inode, dentry);
 
-	}else{
-		//Es un archivo normal
-		printk(KERN_INFO "Remove: file remove request\n");
-	}
+	//Decrementamos el contador de inodos del superbloque
+	printk(KERN_INFO "Remove: decreasing superblock inodes_count\n");
+	super_info = sb->s_fs_info;
+	super_info->inodes_count--;
 
-	//borramos el bloque del nodo
+	//me falta borrarlo del bitmap--------------------------------------
+	printk(KERN_INFO "Remove: saving sb\n");
+	assoofs_save_sb_info(sb);
 
-	//ponemos el bit del bitmap del bloque a 0
-
-	//borramos el nodo del directorio al que pertenece
-
-	//borramos el nodo del superbloque
-
-	//vaciamos el nodo
-
-	//borramos el nodo del almacen de inodos
+	//Destruimos el inodo
+	printk(KERN_INFO "Remove: clear_inode\n");
+	clear_inode(remove_inode);			//Borramos el bloque al que pertenece el nodo
+	printk(KERN_INFO "Remove: destroy_inode\n");
+	__destroy_inode(remove_inode);
     
 	return 0;	//PARA INDICAR QUE TODO HA SALIDO BIEN
 }
