@@ -10,6 +10,13 @@
 #define DRIVER_AUTHOR "Angel Lopez Arias"
 #define DRIVER_DESC   "An assoofs sample"
 
+//Voy a configurar algunas variables para hacer printf con algun color, para que las trazas queden mas visuales
+
+#define R 	"\x1b[31m"		//Red
+#define G   "\x1b[32m"		//Green
+#define Y	"\x1b[33m"		//Yellow
+#define B   "\x1b[34m"		//Blue
+
 //Configuramos unos mutex para proteger el acceso al superbloque y al almacen de inodos
 static DEFINE_MUTEX(assoofs_sb_lock);
 static DEFINE_MUTEX(assoofs_inodes_block_lock);
@@ -52,7 +59,7 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
 	int nbytes;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO "Read request\n");
+	printk(KERN_INFO B "Read request\n");
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
@@ -63,7 +70,7 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
 
     //Para comprobar si hemos o no llegado al final del fichero
     if (*ppos >= inode_info->file_size){
-    	printk(KERN_INFO "READ: EOF reached\n");
+    	printk(KERN_INFO R "READ: EOF reached\n");
     	return 0;   
     }
 
@@ -74,12 +81,12 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
 
 	// Hay que comparar len con el tamanio del fichero por si llegamos al final del fichero
 	nbytes = min((size_t) inode_info->file_size, len); 
-	printk(KERN_INFO "TEXT READ: %s\n", buffer);
+	printk(KERN_INFO Y "TEXT READ: %s\n", buffer);
 	copy_to_user(buf, buffer, nbytes);
 
 	*ppos += nbytes;		//incrementamos ppos
 	brelse(bh);				//liberamos memoria del bufferhead
-	printk(KERN_INFO "BYTES READ: %d\n", nbytes);		//imprimios una traza de lectura
+	printk(KERN_INFO Y "BYTES READ: %d\n", nbytes);		//imprimios una traza de lectura
 	return nbytes;			//devolvemos el numero de bytes leidos
 }
 
@@ -97,7 +104,7 @@ ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, l
 	struct super_block *sb;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
-	printk(KERN_INFO "Write request\n");
+	printk(KERN_INFO G "Write request\n");
 
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
