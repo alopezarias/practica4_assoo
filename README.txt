@@ -12,5 +12,7 @@ A parte tambien estan implementadas algunas funcionalidades extras:
 	- Semaforos en las escrituras del superbloque
 	- Semaforos en las escrituras del almacen de inodos
 	- Funcion de rm para borrar ficheros
+	- Funcion de rmdir para borrar directorios
 	- Funcion de mv para mover ficheros
 	- Funcion de mv para mover directorios
+
