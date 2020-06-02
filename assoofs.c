@@ -8,7 +8,7 @@
 
 //Configuramos unas macros para la licencia 
 #define DRIVER_AUTHOR "Angel Lopez Arias"
-#define DRIVER_DESC   "An assoofs sample"
+#define DRIVER_DESC   "An assoofs sample, with the remove function"
 
 //Voy a configurar algunas variables para hacer printf con algun color, para que las trazas queden mas visuales
 
