@@ -1,5 +1,4 @@
-Este modulo de assoofs tiene las funcionalidades basicas
-requeridas de la practica:
+Este modulo de assoofs tiene las funcionalidades basicas requeridas de la practica:
 
 	- Crear directorios y archivos
 	- Listar elementos de directorios
@@ -7,10 +6,11 @@ requeridas de la practica:
 	- Escribir en archivos
 	- Copiar elementos dentro del sistema
 
-A parte tambien estan implementadas algunas funcionalidades
-extras:
+A parte tambien estan implementadas algunas funcionalidades extras:
 
 	- Cache de inodos
 	- Semaforos en las escrituras del superbloque
 	- Semaforos en las escrituras del almacen de inodos
 	- Funcion de rm para borrar ficheros
+	- Funcion de mv para mover ficheros
+	- Funcion de mv para mover directorios

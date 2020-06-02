@@ -281,7 +281,7 @@ static int assoofs_remove(struct inode *dir, struct dentry *dentry) {
 
 	inode = dentry->d_inode;		//cogemos el nodo del dentry
 	inode_info = inode->i_private;	//cogemos la informacion del inodo del campo i_private
-	inode_info->state_flag == REMOVED;
+	inode_info->state_flag = REMOVED;
 	printk(KERN_INFO "Remove: inode to remove: %llu\n", inode_info->data_block_number);		//informamos con una traza de que inodo vamos a eliminar
 
 	//Extraemos el superbloque del nodo del padre
@@ -370,6 +370,9 @@ static int assoofs_move(struct inode *old_dir, struct dentry *old_dentry, struct
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
 	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
+	struct inode *inode;
+	struct assoofs_inode_info *inode_info;
+
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO B "Move inode request\n" R_C);
@@ -377,11 +380,22 @@ static int assoofs_move(struct inode *old_dir, struct dentry *old_dentry, struct
 	/* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
     / ++++++++++++++++++++++++++++++++++++++++++++ */
-	printk(KERN_INFO G "OLD inode inode: %ld\n" R_C, old_dir->i_ino);
+	inode = old_dentry->d_inode;
+	inode_info = inode->i_private;
+
+
+	if(inode_info->mode == S_IFREG){
+		assoofs_remove(old_dir, old_dentry);
+		assoofs_create(new_dir, new_dentry, S_IFREG, 1);
+	}else{
+		assoofs_remove(old_dir, old_dentry);
+		assoofs_mkdir(new_dir, new_dentry, S_IFDIR);
+	}
+	
+	/*printk(KERN_INFO G "OLD inode inode: %ld\n" R_C, old_dir->i_ino);
 	printk(KERN_INFO G "OLD Dentry inode: %ld\n" R_C, old_dentry->d_inode->i_ino);
 	printk(KERN_INFO G "NEW inode inode: %ld\n" R_C, new_dir->i_ino);
-	printk(KERN_INFO G "NEW Dentry inode: %ld\n" R_C, new_dentry->d_inode->i_ino);
-	printk(KERN_INFO G "Number: %d\n" R_C, num);
+	printk(KERN_INFO G "NEW Dentry inode: %ld\n" R_C, new_dentry->d_inode->i_ino);*/
 	return 0;
 }
 
