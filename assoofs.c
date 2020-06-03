@@ -515,7 +515,7 @@ struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, str
 	 *       DECLARACION VARIABLES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 	uint64_t count = 0;
-	bool inode_found = false;     //necesario para el bucle while
+	//bool inode_found = false;     //necesario para el bucle while
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO B "Search inode info request\n" R_C);
@@ -530,9 +530,9 @@ struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, str
 
 	//--------------  NECESARIO PARA EL REMOVE ---------------//
 
-	while(!inode_found && count < ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count){
+	/*while(!inode_found && count < ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count){
 		if(start->inode_no == search->inode_no){  //COMPARAMOS NUMERO DE INODO
-			if(start->state_flag != REMOVED){   //SI EL ATRIBUTO A BORRADO NO ESTA
+			if(start->state_flag == ALIVE){   //SI EL ATRIBUTO A BORRADO NO ESTA
 				//LO HEMOS ENCONTRADO
 				inode_found = true;  //con esto ya se sale del bucle
 			}else{
@@ -543,9 +543,9 @@ struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, str
 			start++;		//aumentamos el puntero del dir record entry
 		}
 		count++;		//aumentamos el numero de elementos consultados
-	}
+	}*/
 
-	/*while (start->inode_no != search->inode_no && count < ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count) {
+	while (start->inode_no != search->inode_no && count < ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count) {
 		//--------------  NECESARIO PARA EL REMOVE ---------------//
 		if(start->state_flag == REMOVED){
 			//no counteamos
@@ -553,7 +553,7 @@ struct assoofs_inode_info *assoofs_search_inode_info(struct super_block *sb, str
 			count++;
 		}
 		start++;
-	}*/
+	}
 
 	if (start->inode_no == search->inode_no){
 		printk(KERN_INFO "Node_information (ino_no: %llu) found\n", start->inode_no);
@@ -1018,9 +1018,9 @@ struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64
 		if(inode_info->inode_no == inode_no){  //he encontrado el nodo por el que me preguntan
 			
 			//-----------------------------  NECESARIO PARA EL REMOVE -------------- //
-			/*if(inode_info->state_flag == REMOVED){  //si el nodo esta borrado, entonces decrementamos en uno la i, y seguimos buscando
+			if(inode_info->state_flag == REMOVED){  //si el nodo esta borrado, entonces decrementamos en uno la i, y seguimos buscando
 				i--;
-			}else{*/
+			}else{
 				printk(KERN_INFO "Node found\n");
 				//ESTA ES LA MANERA SIN CACHE DE INODOS
 	    		//buffer = kmalloc(sizeof(struct assoofs_inode_info), GFP_KERNEL);
@@ -1029,7 +1029,7 @@ struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64
 
 				memcpy(buffer, inode_info, sizeof(*buffer));					   //COPIO EN BUFFER EL CONTENIDO DEL INODO 
 				break;
-			//}
+			}
 		}
 		inode_info++;  //sigo buscando en los inodos
 	}
