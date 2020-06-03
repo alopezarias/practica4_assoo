@@ -185,6 +185,7 @@ int main(int argc, char *argv[])
         .inode_no = WELCOMEFILE_INODE_NUMBER,                   //Numero de inodo (último inodo reservado + 1)
         .data_block_number = WELCOMEFILE_DATABLOCK_NUMBER,      //Numero de bloque (último bloque reservado + 1)
         .file_size = sizeof(welcomefile_body),                  //Campo file size, declaración estática
+		.state_flag = ALIVE,
     };
 
 /**************************************************************
@@ -195,7 +196,7 @@ int main(int argc, char *argv[])
     struct assoofs_dir_record_entry record = {
         .filename = "README.txt",
         .inode_no = WELCOMEFILE_INODE_NUMBER,
-	.state_flag = ALIVE,
+		.state_flag = ALIVE,
     };
 
 /**************************************************************

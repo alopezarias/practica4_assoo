@@ -18,7 +18,6 @@ struct assoofs_super_block_info {
     uint64_t magic;
     uint64_t block_size;    
     uint64_t inodes_count;
-    //uint64_t inodes_removed_count;
     uint64_t free_blocks;
     char padding[4056];
 };
