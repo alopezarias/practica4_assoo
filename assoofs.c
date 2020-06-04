@@ -249,6 +249,7 @@ static struct inode_operations assoofs_inode_ops = {
     .mkdir = assoofs_mkdir,
     .unlink = assoofs_remove,
     .rename = assoofs_move,
+    .rmdir = assoofs_remove,
 };
 
 /* =========================================================== *
@@ -712,10 +713,8 @@ static int assoofs_move(struct inode *old_dir, struct dentry *old_dentry, struct
 	 *       DECLARACION FUNCIONES                 *
 	/ ++++++++++++++++++++++++++++++++++++++++++++ */
 
-	/*
 	struct inode *inode;
 	struct assoofs_inode_info *inode_info;
-	*/
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO B "Move node request" RC "\n");
@@ -723,8 +722,8 @@ static int assoofs_move(struct inode *old_dir, struct dentry *old_dentry, struct
     /* ++++++++++++++++++++++++++++++++++++++++++++ /
      *      PROCECEMOS CON EL DESARROLLO           * 
     / ++++++++++++++++++++++++++++++++++++++++++++ */
-
-    /*inode = old_dentry->d_inode;
+	
+	inode = old_dentry->d_inode;
 	inode_info = inode->i_private;
 
 	if(inode_info->mode == S_IFREG){  //si es un fichero regular
@@ -737,7 +736,6 @@ static int assoofs_move(struct inode *old_dir, struct dentry *old_dentry, struct
 		assoofs_mkdir(new_dir, new_dentry, S_IFDIR);
 	}
 	return 0;
-	*/
 
 	printk(KERN_INFO "\n");
     return 0;
