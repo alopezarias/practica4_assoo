@@ -9,18 +9,24 @@ const int ASSOOFS_ROOTDIR_BLOCK_NUMBER = 2;
 const int ASSOOFS_ROOTDIR_INODE_NUMBER = 1;
 const int ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED = 64;
 
+//Constantes necesarias para el remove
+#define ASSOOFS_STATE_ALIVE 1
+#define ASSOOFS_STATE_REMOVED 0
+
 struct assoofs_super_block_info {
     uint64_t version;
     uint64_t magic;
     uint64_t block_size;    
     uint64_t inodes_count;
     uint64_t free_blocks;
-    char padding[4056];
+    uint64_t real_inodes_count;
+    char padding[4048];
 };
 
 struct assoofs_dir_record_entry {
     char filename[ASSOOFS_FILENAME_MAXLEN];
     uint64_t inode_no;
+    uint64_t state_flag;                //atributo que controla si un dentry esta borrado o esta vivo
 };
 
 struct assoofs_inode_info {
@@ -31,4 +37,5 @@ struct assoofs_inode_info {
         uint64_t file_size;
         uint64_t dir_children_count;
     };
+    uint64_t state_flag;                //atributo que controla si un inodo esta borrado o esta vivo
 };

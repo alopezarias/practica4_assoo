@@ -54,6 +54,7 @@ static int write_root_inode(int fd) {
     root_inode.mode = S_IFDIR;                                      //Modo: directorio
     root_inode.inode_no = ASSOOFS_ROOTDIR_INODE_NUMBER;             //Número de inodo
     root_inode.data_block_number = ASSOOFS_ROOTDIR_BLOCK_NUMBER;    //Número de bloque
+    root_inode.state_flag = ASSOOFS_STATE_ALIVE;                //necesario para el remove
     root_inode.dir_children_count = 1;                              //Número de archivos que vamos a meter dentro
 
     /**************************************************************
@@ -184,6 +185,7 @@ int main(int argc, char *argv[])
         .mode = S_IFREG,                                        //Para que sea un fichero regular
         .inode_no = WELCOMEFILE_INODE_NUMBER,                   //Numero de inodo (último inodo reservado + 1)
         .data_block_number = WELCOMEFILE_DATABLOCK_NUMBER,      //Numero de bloque (último bloque reservado + 1)
+        .state_flag = ASSOOFS_STATE_ALIVE,                  //necesario para el remove
         .file_size = sizeof(welcomefile_body),                  //Campo file size, declaración estática
     };
 
@@ -195,6 +197,7 @@ int main(int argc, char *argv[])
     struct assoofs_dir_record_entry record = {
         .filename = "README.txt",
         .inode_no = WELCOMEFILE_INODE_NUMBER,
+        .state_flag = ASSOOFS_STATE_ALIVE,
     };
 
 /**************************************************************
