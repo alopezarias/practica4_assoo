@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
 ***************************************************************/
 
     char welcomefile_body[] = "Hola mundo, os saludo desde un sistema de ficheros ASSOOFS.\n";
-    
+
 
 /**************************************************************
 * Creamos el inodo de bienvenida con los siguientes 
@@ -185,18 +185,16 @@ int main(int argc, char *argv[])
         .inode_no = WELCOMEFILE_INODE_NUMBER,                   //Numero de inodo (último inodo reservado + 1)
         .data_block_number = WELCOMEFILE_DATABLOCK_NUMBER,      //Numero de bloque (último bloque reservado + 1)
         .file_size = sizeof(welcomefile_body),                  //Campo file size, declaración estática
-		.state_flag = ALIVE,
     };
 
 /**************************************************************
 * Creamos una entrada de directorio, para decir que el fichero
 * está dentro de un directorio
 ***************************************************************/
-    
+
     struct assoofs_dir_record_entry record = {
         .filename = "README.txt",
         .inode_no = WELCOMEFILE_INODE_NUMBER,
-		.state_flag = ALIVE,
     };
 
 /**************************************************************
@@ -234,13 +232,13 @@ int main(int argc, char *argv[])
 
         if (write_root_inode(fd))
             break;
-        
+
         if (write_welcome_inode(fd, &welcome))
             break;
 
         if (write_dirent(fd, &record))
             break;
-        
+
         if (write_block(fd, welcomefile_body, welcome.file_size))
             break;
 
@@ -249,4 +247,4 @@ int main(int argc, char *argv[])
 
     close(fd);
     return ret;
-}
+} 
