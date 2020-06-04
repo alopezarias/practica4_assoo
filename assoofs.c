@@ -332,6 +332,7 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
 	struct assoofs_dir_record_entry *dir_contents;
 	struct buffer_head *bh;
 	uint64_t block_number;
+	int i;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO B "New file request" RC "\n"); 
@@ -400,7 +401,15 @@ static int assoofs_create(struct inode *dir, struct dentry *dentry, umode_t mode
 										//leemos del disco la parte de losdatos y la metemos en dir_contents. 
 	dir_contents = (struct assoofs_dir_record_entry *)bh->b_data;
 										//APUNTA AL PRINCIPIO DEL DIRECTORIO PADRE
-	dir_contents += parent_inode_info->dir_children_count;
+	
+	for(i=0; i < parent_inode_info->dir_children_count; i++){
+		if(dir_contents->state_flag == ASSOOFS_STATE_REMOVED){
+			i--;
+		}
+		dir_contents++;
+	}
+		//Este for es la sustitucion de la linea de abajo para que todo pueda funcionar bien
+	//dir_contents += parent_inode_info->dir_children_count;
 										//Para avanzar vamos sumando cosas. Cuando le sumamos el num de elementos avanzamos al final del directorio padre
 	dir_contents->inode_no = inode_info->inode_no; // inode_info es la información persistente del inodo creado en el paso 2.
 										//Colocamos lo que hemos hecho antes con inode info
@@ -442,6 +451,7 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
 	struct assoofs_dir_record_entry *dir_contents;
 	struct buffer_head *bh;
 	uint64_t block_number;
+	int i;
 
 	//IMPRESION DE LA TRAZA CORRESPONDIENTE AL USO DE ESTA FUNCION
 	printk(KERN_INFO B "New directory request" RC "\n");
@@ -511,7 +521,14 @@ static int assoofs_mkdir(struct inode *dir , struct dentry *dentry, umode_t mode
 										//leemos del disco la parte de losdatos y la metemos en dir_contents. 
 	dir_contents = (struct assoofs_dir_record_entry *)bh->b_data;
 										//APUNTA AL PRINCIPIO DEL DIRECTORIO PADRE
-	dir_contents += parent_inode_info->dir_children_count;
+	for(i=0; i < parent_inode_info->dir_children_count; i++){
+		if(dir_contents->state_flag == ASSOOFS_STATE_REMOVED){
+			i--;
+		}
+		dir_contents++;
+	}
+		//Este for es la sustitucion de la linea de abajo para que todo pueda funcionar bien
+	//dir_contents += parent_inode_info->dir_children_count;
 										//Para avanzar vamos sumando cosas. Cuando le sumamos el num de elementos avanzamos al final del directorio padre
 	dir_contents->inode_no = inode_info->inode_no; // inode_info es la información persistente del inodo creado en el paso 2.
 										//Colocamos lo que hemos hecho antes con inode info
@@ -624,6 +641,9 @@ static int assoofs_remove(struct inode *dir, struct dentry *dentry){
 		}/*else{
 			record->state_flag = ASSOOFS_STATE_ALIVE;
 		}*/
+		if(record->state_flag == ASSOOFS_STATE_REMOVED){
+			i--;
+		}
 		record++;
 	}
 
@@ -643,6 +663,7 @@ static int assoofs_remove(struct inode *dir, struct dentry *dentry){
 			printk(KERN_INFO B "Have file: " RC " '%s' (" Y "ino" RC ":%llu) --> "R" ALIVE" RC "\n", record2->filename, record2->inode_no);
 		}else{
 			printk(KERN_INFO B "Have file: " RC " '%s' (" Y "ino" RC ":%llu) --> "B" DEAD" RC "\n", record2->filename, record2->inode_no);
+			i--;
 		}
 		record2++;
 	}
@@ -830,7 +851,11 @@ void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 	//--------------------------  MUTEX DEL SUPER BLOQUE  ---------------------------//
     mutex_lock_interruptible(&assoofs_sb_lock);
 
+	
+	//creo que esta linea me da fallo
 	inode_info += assoofs_sb->inodes_count;
+
+    //inode_info += inode->data_block_number;
 	memcpy(inode_info, inode, sizeof(struct assoofs_inode_info));
 
 	mark_buffer_dirty(bh);		//LO MARCAMOS COMO SUCIO
@@ -877,7 +902,7 @@ int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *i
 	mark_buffer_dirty(bh);		//LO MARCAMOS COMO SUCIO
 	sync_dirty_buffer(bh);		//SINCRONIZAMOS
 	printk(KERN_INFO "Node_Info saved correctly\n");
-	brelse(bh);					//liberamos memoria del bufferhead
+	brelse(bh);					//liberamos memoria del bufferheadinodes_count
 
 	mutex_unlock(&assoofs_sb_lock);
 	printk(KERN_INFO "\n");
