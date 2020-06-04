@@ -29,7 +29,7 @@ static int write_superblock(int fd) {
 
     /**************************************************************
     * Función escribir superbloque (primeros 4096 bytes: 40 con los
-    * campos definidos y 4056 de relleno)
+    * campos definidos y 4048 de relleno)
     ***************************************************************/
 
     ret = write(fd, &sb, sizeof(sb));               

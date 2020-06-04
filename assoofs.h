@@ -13,13 +13,14 @@ const int ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED = 64;
 #define ASSOOFS_STATE_ALIVE 1
 #define ASSOOFS_STATE_REMOVED 0
 
+//El relleno original de 4056 bytes lo he cambiado por 4048 debido al nuevo campo introducido
 struct assoofs_super_block_info {
     uint64_t version;
     uint64_t magic;
     uint64_t block_size;    
-    uint64_t inodes_count;
+    uint64_t inodes_count;			//Lleva una cuenta irreal de los inodos, todos los creados
     uint64_t free_blocks;
-    uint64_t real_inodes_count;
+    uint64_t real_inodes_count;		//Lleva la cuenta real de los nodos vivos en el sistema
     char padding[4048];
 };
 
