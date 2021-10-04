@@ -31,12 +31,3 @@ tenga en cuenta el esfuerzo.
 Un saludo
 
 		Ángel
-
- ____________________________
-|                            |
-|      DATOS PERSONALES      |
-|____________________________|
-|                            |
-|     Ángel López Arias      |
-|      DNI: 54130259-N       |
-|____________________________|
