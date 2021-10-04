@@ -22,7 +22,7 @@ Como informacion adicional, comento que me ha llevado mucho tiempo y dedicacion
 para que las partes opcionales funcionen como es debido.
 
 Por último, me gustaría decir que funciona bien, aunque no he podido
-confirmarlo completamente. He realizado pruebas exaustivas de borrado de ficheros
+confirmarlo completamente. He realizado pruebas exhaustivas de borrado de ficheros
 y directorios, comprobando cada traza, para ver si se hacen bien y, en esta
 ultima versión, me agrada decir que ha pasado mis pruebas. Claro está que ésto
 no garantiza que funcione en todos los casos posibles. Igualmente espero que se
